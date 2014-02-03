@@ -7,6 +7,7 @@ So all credit goes to [http://schinagl.priv.at](Hermann Schinagl)!
 FEATURES
 --------
 * backuping multiple sources in one destination
+* creating Shadow Volume copy before making backup
 * sending notification emails
 
 INSTALLATION
