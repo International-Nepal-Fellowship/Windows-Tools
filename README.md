@@ -16,7 +16,9 @@ INSTALLATION
 1. Read the documentation of "ln" http://schinagl.priv.at/nt/ln/ln.html
 2. Download "ln" and unpack the file.
 3. Place ntfs-hardlink-backup.ps1 into ln\bat directory
-4. run ntfs-hardlink-backup.ps1 with full path 
+4. start powershell from windows start menu (you need Windows 7 or Win Server for that, on XP you would need to install PowerShell 2 first)
+5. allow local non-signed scripts to run by typing “Set-ExecutionPolicy RemoteSigned“
+6. run ntfs-hardlink-backup.ps1 with full path 
 
 CHANGELOG
 -------------
