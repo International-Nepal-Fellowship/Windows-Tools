@@ -9,6 +9,7 @@ FEATURES
 * backuping multiple sources in one destination
 * creating Shadow Volume copy before making backup
 * sending notification emails
+* takes extra options for ln (timetolerance and traditional)
 
 INSTALLATION
 -------------
@@ -16,4 +17,14 @@ INSTALLATION
 2. Download "ln" and unpack the file.
 3. Place ntfs-hardlink-backup.ps1 into ln\bat directory
 4. run ntfs-hardlink-backup.ps1 with full path 
+
+CHANGELOG
+-------------
+**1.0_rc1**
+* added timetolerance and traditional options
+* does not run DeLoreanCopy.bat anymore
+* changed SMTPOverSSL to NoSMTPOverSSL
+
+**0.9**
+* initial public release
 
