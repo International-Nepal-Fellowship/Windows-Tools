@@ -3,7 +3,7 @@ ntfs-hardlink-backup
 
 This software is used for creating hard-link-backups.
 The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	
-So all credit goes to [http://schinagl.priv.at](Hermann Schinagl)!
+So all credit goes to [Hermann Schinagl](http://schinagl.priv.at)!
 FEATURES
 --------
 * backuping multiple sources in one destination
