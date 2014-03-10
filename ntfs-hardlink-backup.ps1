@@ -14,7 +14,7 @@
 .PARAMETER backupDestination
     Where the data should go to.
 .PARAMETER backupsToKeep
-    How many backup copies should be keept. All older copies will be deleted. Default=50
+    How many backup copies should be kept. All older copies will be deleted. Default=50
 .PARAMETER timeTolerance
     Sometimes useful to not have an exact timestamp comparison bewteen source and dest, but kind of a fuzzy comparison, because the systemtime of NAS drives is not exactly synced with the host.
 	To overcome this we use the -timeTolerance switch to specify a value in milliseconds 
@@ -24,13 +24,13 @@
 .PARAMETER emailTo
     Address to be notified about success and problems.
 .PARAMETER emailFrom
-    Address the notification email is send from.	
+    Address the notification email is sent from.	
 .PARAMETER SMTPServer
     Domainname of the SMTP Server.
 .PARAMETER SMTPUser
-    Username if the SMTP Server needs authentification
+    Username if the SMTP Server needs authentication
 .PARAMETER SMTPPassword
-    Password if the SMTP Server needs authentification	
+    Password if the SMTP Server needs authentication	
 .PARAMETER NoSMTPOverSSL
     Switch off the use of SSL to send Emails.
 .PARAMETER SMTPPort
@@ -42,7 +42,7 @@
     Simple backup
 .EXAMPLE
     PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources "D:\backup_source1","c:\backup_source2" -backupDestination D:\backup_dest -emailTo "me@address.org" -emailFrom "backup@ocompany.rg" -SMTPServer company.org -SMTPUser "backup@company.org" -SMTPPassword "secr4et" 
-    Backup with more that one source
+    Backup with more than one source
 .NOTES
     Author: Artur Neumann *INFN*
     Date:   Febr 11 2014
