@@ -22,11 +22,11 @@
 	Some NAS boxes only support a very outdated version of the SMB protocol. SMB is used when network drives are connected. This old version of SMB in certain situations does not support the fast enumeration methods of ln.exe, which causes ln.exe to simply do nothing.
 	To overcome this use the -traditional switch, which forces ln.exe to enumerate files the old, but a little slower way
 .PARAMETER emailTo
-    Address to be notified about success and problems. If not given no Emails will be send.
+    Address to be notified about success and problems. If not given no Emails will be sent.
 .PARAMETER emailFrom
-    Address the notification email is sent from. If not given no Emails will be send.	
+    Address the notification email is sent from. If not given no Emails will be sent.
 .PARAMETER SMTPServer
-    Domainname of the SMTP Server. If not given no Emails will be send.
+    Domainname of the SMTP Server. If not given no Emails will be sent.
 .PARAMETER SMTPUser
     Username if the SMTP Server needs authentication
 .PARAMETER SMTPPassword
@@ -38,7 +38,7 @@
 .PARAMETER SMTPPort
     Port of the SMTP Server. Default=587
 .PARAMETER emailSubject
-    Subject for the notifiation Email	
+    Subject for the notification Email	
 .EXAMPLE
     PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources D:\backup_source1 -backupDestination D:\backup_dest -emailTo "me@address.org" -emailFrom "backup@ocompany.rg" -SMTPServer company.org -SMTPUser "backup@company.org" -SMTPPassword "secr4et" 
     Simple backup
@@ -47,7 +47,7 @@
     Backup with more than one source
 .NOTES
     Author: Artur Neumann *INFN*
-    Date:   MArch 11 2014
+    Date:   March 11 2014
 	Version: 1.0_rc2
 #>
 
