@@ -22,17 +22,19 @@
 	Some NAS boxes only support a very outdated version of the SMB protocol. SMB is used when network drives are connected. This old version of SMB in certain situations does not support the fast enumeration methods of ln.exe, which causes ln.exe to simply do nothing.
 	To overcome this use the -traditional switch, which forces ln.exe to enumerate files the old, but a little slower way
 .PARAMETER emailTo
-    Address to be notified about success and problems.
+    Address to be notified about success and problems. If not given no Emails will be send.
 .PARAMETER emailFrom
-    Address the notification email is send from.	
+    Address the notification email is send from. If not given no Emails will be send.	
 .PARAMETER SMTPServer
-    Domainname of the SMTP Server.
+    Domainname of the SMTP Server. If not given no Emails will be send.
 .PARAMETER SMTPUser
     Username if the SMTP Server needs authentification
 .PARAMETER SMTPPassword
     Password if the SMTP Server needs authentification	
 .PARAMETER NoSMTPOverSSL
     Switch off the use of SSL to send Emails.
+.PARAMETER NoShadowCopy
+    Switch off the use of Shadow Copys.
 .PARAMETER SMTPPort
     Port of the SMTP Server. Default=587
 .PARAMETER emailSubject
@@ -45,30 +47,32 @@
     Backup with more that one source
 .NOTES
     Author: Artur Neumann *INFN*
-    Date:   Febr 11 2014
-	Version: 1.0_rc1
+    Date:   MArch 11 2014
+	Version: 1.0_rc2
 #>
 
 [CmdletBinding()]
 Param(
-  [Parameter(Mandatory=$True)]
+   [Parameter(Mandatory=$True)]
    [String[]]$backupSources,
    [Parameter(Mandatory=$True)]
    [String]$backupDestination,
    [Parameter(Mandatory=$False)]
    [Int32]$backupsToKeep=50,
-   [Parameter(Mandatory=$True)]
-   [string]$emailTo,
-   [Parameter(Mandatory=$True)]
-   [string]$emailFrom,
-   [Parameter(Mandatory=$True)]
-   [string]$SMTPServer,
+   [Parameter(Mandatory=$False)]
+   [string]$emailTo="",
+   [Parameter(Mandatory=$False)]
+   [string]$emailFrom="",
+   [Parameter(Mandatory=$False)]
+   [string]$SMTPServer="",
    [Parameter(Mandatory=$False)]
    [string]$SMTPUser="",
    [Parameter(Mandatory=$False)]
    [string]$SMTPPassword="",
    [Parameter(Mandatory=$False)]
    [switch]$NoSMTPOverSSL=$False,   
+   [Parameter(Mandatory=$False)]
+   [switch]$NoShadowCopy=$False,  
    [Parameter(Mandatory=$False)]
    [Int32]$SMTPPort=587,   
    [Parameter(Mandatory=$False)]
@@ -104,32 +108,39 @@ foreach($backup_source in $backupSources)
 	echo $backup_source_folder
 
 	echo "============Creating Backup of $backup_source============" 
-	echo "1. Creating Shadow Volume Copy..."
-	try {
-		$s1 = (gwmi -List Win32_ShadowCopy).Create("$backup_source_drive_letter\", "ClientAccessible")
-		$s2 = gwmi Win32_ShadowCopy | ? { $_.ID -eq $s1.ShadowID }
+	if ($NoShadowCopy -eq $False) {
+		
+		echo "1. Creating Shadow Volume Copy..."
+		try {
+			$s1 = (gwmi -List Win32_ShadowCopy).Create("$backup_source_drive_letter\", "ClientAccessible")
+			$s2 = gwmi Win32_ShadowCopy | ? { $_.ID -eq $s1.ShadowID }
+		}
+		catch { 
+			$output = "ERROR: Could not create Shadow Copy`r`n"
+			$emailBody = "$emailBody`r`n$output`r`n$_ `r`n"
+			$error_during_backup = $true
+			echo $output  $_
+		}
+		
+		$id = $s2.ID
+		echo "Shadow Volume ID: $id"
+		echo "Shadow Volume DeviceObject: $s2.DeviceObject"
+		
+		
+		$shadowCopies = Get-WMIObject -Class Win32_ShadowCopy 
+
+		cmd /c mklink /d "$backup_source_drive_letter\shadowcopy_$id" "$s2.DeviceObject"
+		echo "done`n"
+
+		$backup_source_path = $s2.DeviceObject+$backup_source_path
 	}
-	catch { 
-		$output = "ERROR: Could not create Shadow Copy`r`n"
-		$emailBody = "$emailBody`r`n$output`r`n$_ `r`n"
-		$error_during_backup = $true
-		echo $output  $_
+	else { 
+		echo "1. Skipping creation of Shadow Volume Copy. ATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!"
+		$backup_source_path = $backup_source
 	}
-	$deviceObject  = $s2.DeviceObject + "\"
 	
-	$id = $s2.ID
-	echo "Shadow Volume ID: $id"
-	echo "Shadow Volume DeviceObject: $deviceObject"
-    
-	
-	$shadowCopies = Get-WMIObject -Class Win32_ShadowCopy 
-
-	cmd /c mklink /d "$backup_source_drive_letter\shadowcopy_$id" "$deviceObject"
-	echo "done`n"
-
-
 	echo "2. Running backup..."
-	echo "Source: $backup_source_drive_letter\shadowcopy_$id\$backup_source_path"
+	echo "Source: $backup_source_path"
 	echo "Destination: $actualBackupDestination"
 
 
@@ -152,8 +163,8 @@ foreach($backup_source in $backupSources)
 	
 	if ($lastBackupFolderName -eq "" ) {
 		echo "full copy"
-		#echo "$script_path\..\ln.exe --copy `"$backup_source_drive_letter\shadowcopy_$id\$backup_source_path`" `"$actualBackupDestination`"  >> $log_file"
-		`cmd /c  "$script_path\..\ln.exe $traditionalArgument --copy `"$backup_source_drive_letter\shadowcopy_$id\$backup_source_path`" `"$actualBackupDestination`"  >> $log_file"`
+		#echo "$script_path\..\ln.exe $traditionalArgument --copy `"$backup_source_path`" `"$actualBackupDestination`"  >> $log_file"
+		`cmd /c  "$script_path\..\ln.exe $traditionalArgument --copy `"$backup_source_path`" `"$actualBackupDestination`"  >> $log_file"`
 	
 	} else {
 		if ($timeTolerance -ne 0) {
@@ -164,8 +175,8 @@ foreach($backup_source in $backupSources)
 	
 		
 		echo "Delorian copy against $lastBackupFolderName"
-		#echo "$script_path\..\ln.exe --delorean $traditionalArgument $timeToleranceArgument `"$backup_source_drive_letter\shadowcopy_$id\$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"
-		`cmd /c  "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument --delorean `"$backup_source_drive_letter\shadowcopy_$id\$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"`
+		#echo "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"
+		`cmd /c  "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"`
 	
 	
 	}
@@ -187,41 +198,43 @@ foreach($backup_source in $backupSources)
 
 	$emailBody = $emailBody + $summary
 	
-
-	foreach ($shadowCopy in $shadowCopies){
-	if ($s2.ID -eq $shadowCopy.ID) {
-		echo  "3. Deleting Shadow Copy ..."
-		try {
-			$shadowCopy.Delete()
+	if ($NoShadowCopy -eq $False) {
+		foreach ($shadowCopy in $shadowCopies){
+		if ($s2.ID -eq $shadowCopy.ID) {
+			echo  "3. Deleting Shadow Copy ..."
+			try {
+				$shadowCopy.Delete()
+				}
+			catch {
+				$output = "ERROR: Could not delete Shadow Copy"
+				$emailBody = $emailBody + $output + $_
+				$error_during_backup = $true
+				echo $output  $_	
 			}
-		catch {
-			$output = "ERROR: Could not delete Shadow Copy"
-			$emailBody = $emailBody + $output + $_
-			$error_during_backup = $true
-			echo $output  $_	
-		}
-		cmd /c rmdir "$backup_source_drive_letter\shadowcopy_$id"
-		echo "done`n"
-		break
-		}
+			echo "done`n"
+			break
+			}
+		} 
 	} 
-	
 	echo "`n"
 }
 
-echo "============Sending Email============"
-if ($error_during_backup) {
-	$EmailSubject = "ERROR - $EmailSubject"
-}
-$SMTPMessage = New-Object System.Net.Mail.MailMessage($emailFrom,$emailTo,$emailSubject,$emailBody)
-$attachment = New-Object System.Net.Mail.Attachment("$log_file" )
-$SMTPMessage.Attachments.Add($attachment)
-$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPServer, $SMTPPort) 
-if ($NoSMTPOverSSL -eq $False) {
-	$SMTPClient.EnableSsl = $True
+if ($emailTo -AND $emailFrom -AND $SMTPServer) {
+	echo "============Sending Email============"
+
+	if ($error_during_backup) {
+		$EmailSubject = "ERROR - $EmailSubject"
+	}
+	$SMTPMessage = New-Object System.Net.Mail.MailMessage($emailFrom,$emailTo,$emailSubject,$emailBody)
+	$attachment = New-Object System.Net.Mail.Attachment("$log_file" )
+	$SMTPMessage.Attachments.Add($attachment)
+	$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPServer, $SMTPPort) 
+	if ($NoSMTPOverSSL -eq $False) {
+		$SMTPClient.EnableSsl = $True
 	}
 
-$SMTPClient.Credentials = New-Object System.Net.NetworkCredential($SMTPUser, $SMTPPassword); 
-$SMTPClient.Send($SMTPMessage)
-$attachment.Dispose()
-echo "done"
+	$SMTPClient.Credentials = New-Object System.Net.NetworkCredential($SMTPUser, $SMTPPassword); 
+	$SMTPClient.Send($SMTPMessage)
+	$attachment.Dispose()
+	echo "done"
+}
