@@ -47,8 +47,8 @@
     Backup with more than one source
 .NOTES
     Author: Artur Neumann *INFN*
-    Date:   March 11 2014
-	Version: 1.0_rc2
+    Date:   March 18 2014
+	Version: 1.0_rc3
 #>
 
 [CmdletBinding()]
@@ -97,20 +97,18 @@ If (Test-Path $log_file){
 
 foreach($backup_source in $backupSources)
 {
-          
+    $stepCounter = 1     
 	$backup_source_drive_letter = split-path $backup_source -qualifier
 	$backup_source_path =  split-path $backup_source -noQualifier
 	$backup_source_folder =  split-path $backup_source -leaf
 	$dateTime = get-date -f "yyyy-MM-dd HH-mm-ss"
 	$actualBackupDestination = "$backupDestination\$backup_source_folder - $dateTime"
 
-	
-	echo $backup_source_folder
-
 	echo "============Creating Backup of $backup_source============" 
 	if ($NoShadowCopy -eq $False) {
 		
-		echo "1. Creating Shadow Volume Copy..."
+		echo "$stepCounter. Creating Shadow Volume Copy..."
+		$stepCounter++
 		try {
 			$s1 = (gwmi -List Win32_ShadowCopy).Create("$backup_source_drive_letter\", "ClientAccessible")
 			$s2 = gwmi Win32_ShadowCopy | ? { $_.ID -eq $s1.ShadowID }
@@ -135,23 +133,27 @@ foreach($backup_source in $backupSources)
 		$backup_source_path = $s2.DeviceObject+$backup_source_path
 	}
 	else { 
-		echo "1. Skipping creation of Shadow Volume Copy. ATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!"
+		echo "$stepCounter. Skipping creation of Shadow Volume Copy. ATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
+		$stepCounter++
 		$backup_source_path = $backup_source
 	}
 	
-	echo "2. Running backup..."
+	echo "$stepCounter. Running backup..."
+	$stepCounter++
 	echo "Source: $backup_source_path"
 	echo "Destination: $actualBackupDestination"
 
 
 	$oldBackupItems = Get-ChildItem -Path $backupDestination
 	$lastBackupFolderName = ""
+	$lastBackupFolders = @()
 	# get me the last backup if any
 	foreach ($item in $oldBackupItems)
 	{
 		if ($item.Attributes -eq "Directory" -AND $item.Name  -match '^'+$backup_source_folder+' - \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' )
 		{
 			$lastBackupFolderName = $item.Name
+			$lastBackupFolders += $item
 		}
 	}
 	
@@ -193,6 +195,7 @@ foreach($backup_source in $backupSources)
 	}
 
 	echo "done`n"
+	
 	$summary = "`n------Summary-----`nBackup FROM: $backup_source TO: $backupDestination`n" + $summary	
 	echo $summary
 
@@ -201,7 +204,8 @@ foreach($backup_source in $backupSources)
 	if ($NoShadowCopy -eq $False) {
 		foreach ($shadowCopy in $shadowCopies){
 		if ($s2.ID -eq $shadowCopy.ID) {
-			echo  "3. Deleting Shadow Copy ..."
+			echo  "$stepCounter. Deleting Shadow Copy ..."
+			$stepCounter++
 			try {
 				$shadowCopy.Delete()
 				}
@@ -217,6 +221,25 @@ foreach($backup_source in $backupSources)
 		} 
 	} 
 	echo "`n"
+	
+	echo  "$stepCounter. Deleting Old Backups ..."
+	$backupsToDelete=$lastBackupFolders.length - $backupsToKeep
+	$backupsDeleted = 0
+	while ($backupsDeleted -le $backupsToDelete)
+	{
+		$folderToDelete =  $backupDestination +"\"+ $lastBackupFolders[$backupsDeleted].Name
+		echo "Deleting $folderToDelete"
+		Remove-Item $folderToDelete -recurse
+		$backupsDeleted++
+	}
+	
+	$summary = "`nDeleted $backupsDeleted old backup(s)`n"
+	echo $summary
+
+	$emailBody = $emailBody + $summary
+	
+	echo "done`n"
+	
 }
 
 if ($emailTo -AND $emailFrom -AND $SMTPServer) {
