@@ -22,6 +22,9 @@ INSTALLATION
 
 CHANGELOG
 -------------
+**1.0_rc3**
+* delets old backups
+
 **1.0_rc2**
 * sending email is optional.
 * shadow copy is optional
