@@ -91,6 +91,7 @@ $script_path = Split-Path -parent $MyInvocation.MyCommand.Definition
 $log_file="$script_path\backup.log"
 
 If (Test-Path $log_file){
+	#TODO check for error
 	Remove-Item $log_file
 }
 
