@@ -36,7 +36,7 @@
 .PARAMETER NoSMTPOverSSL
     Switch off the use of SSL to send Emails.
 .PARAMETER NoShadowCopy
-    Switch off the use of Shadow Copys.
+    Switch off the use of Shadow Copies. Can be useful if you have no permissions to create Shadow Copies
 .PARAMETER SMTPPort
     Port of the SMTP Server. Default=587
 .PARAMETER emailSubject
@@ -49,8 +49,8 @@
     Backup with more than one source
 .NOTES
     Author: Artur Neumann *INFN*
-    Date:   March 19 2014
-	Version: 1.0_rc4
+    Date:   March 20 2014
+	Version: 1.0_rc5
 #>
 
 [CmdletBinding()]
@@ -96,8 +96,27 @@ $script_path = Split-Path -parent $MyInvocation.MyCommand.Definition
 $log_file="$script_path\backup.log"
 
 If (Test-Path $log_file){
-	#TODO check for error
-	Remove-Item $log_file
+	try
+	{
+		Remove-Item $log_file -erroraction stop
+	}
+	catch
+	{
+		$output = "ERROR: Could not delete old log file`r`n$_`r`n"
+		$emailBody = "$emailBody`r`n$output`r`n"
+		echo $output
+	}
+}
+
+try
+{
+	New-Item $log_file -type file -force | Out-Null
+}
+catch
+{
+	$output = "ERROR: Could not create new log file`r`n$_`r`n"
+	$emailBody = "$emailBody`r`n$output`r`n"
+	echo $output
 }
 
 
@@ -130,18 +149,14 @@ foreach($backup_source in $backupSources)
 			$backup_source_path = $s2.DeviceObject+$backup_source_path		
 		}
 		catch { 
-		#ToDo get the real error message
-		#ToDo put $output to logfile
-		#ToDo proceed without Shadow Copy
-			$output = "ERROR: Could not create Shadow Copy`r`n"
-			$emailBody = "$emailBody`r`n$output`r`n$_ `r`n"
+			$output = "ERROR: Could not create Shadow Copy`r`n$_ `r`nATTENTION: Skipping creation of Shadow Volume Copy. ATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`r`n"
+			$emailBody = "$emailBody`r`n$output`r`n"
 			$error_during_backup = $true
-			echo $output  $_
+			echo $output 
+			$output | Out-File $log_file -encoding ASCII -append
 			$backup_source_path = $backup_source
-			echo "ATTENTION: Skipping creation of Shadow Volume Copy. ATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
-
+			$NoShadowCopy = $True
 		}
-		
 
 	}
 	else { 
@@ -199,9 +214,7 @@ foreach($backup_source in $backupSources)
 		
 		echo "Delorian copy against $lastBackupFolderName"
 		#echo "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument $excludeString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"
-		`cmd /c  "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument $excludeString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"`
-	
-	
+		`cmd /c  "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument $excludeString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"`	
 	}
 	
 	$summary = ""
@@ -250,17 +263,18 @@ foreach($backup_source in $backupSources)
 	{
 		$folderToDelete =  $backupDestination +"\"+ $lastBackupFolders[$backupsDeleted].Name
 		echo "Deleting $folderToDelete"
+		"`r`nDeleting $folderToDelete" | Out-File $log_file  -encoding ASCII -append
 		Remove-Item $folderToDelete -recurse
 		$backupsDeleted++
 	}
 	
 	$summary = "`nDeleted $backupsDeleted old backup(s)`n"
 	echo $summary
+	$summary | Out-File $log_file  -encoding ASCII -append
 
 	$emailBody = $emailBody + $summary
 	
-	echo "done`n"
-	
+	echo "done`n"	
 }
 
 if ($emailTo -AND $emailFrom -AND $SMTPServer) {
@@ -270,22 +284,33 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	$fileToZip = get-item $log_file
 
 	If (Test-Path $zipFilePath){
-		#TODO check for permission error
-		Remove-Item $zipFilePath
-	}
+		try
+		{
+			Remove-Item "$zipFilePath" -erroraction stop
+			if (-not (test-path $zipFilePath)) { 
+			  set-content $zipFilePath ("PK" + [char]5 + [char]6 + ("$([char]0)" * 18)) 
+			} 
 
-	if (-not (test-path $zipFilePath)) { 
-	  set-content $zipFilePath ("PK" + [char]5 + [char]6 + ("$([char]0)" * 18)) 
-	} 
-
-	$ZipFile = (new-object -com shell.application).NameSpace($zipFilePath) 
-	$zipfile.CopyHere($fileToZip.fullname)	
-	
-	$timeSlept = 0
-	while ($zipfile.Items().Count -le 0 -AND $timeSlept -le $maxMsToSleepForZipCreation )
-	{
-		Start-sleep -milliseconds $msToWaitDuringZipCreation
-		$timeSlept = $timeSlept + $msToWaitDuringZipCreation
+			$ZipFile = (new-object -com shell.application).NameSpace($zipFilePath) 
+			$zipfile.CopyHere($fileToZip.fullname)	
+			
+			$timeSlept = 0
+			while ($zipfile.Items().Count -le 0 -AND $timeSlept -le $maxMsToSleepForZipCreation )
+			{
+				Start-sleep -milliseconds $msToWaitDuringZipCreation
+				$timeSlept = $timeSlept + $msToWaitDuringZipCreation
+			}			
+			$attachment = New-Object System.Net.Mail.Attachment("$zipFilePath" )
+		}
+		catch
+		{
+			$error_during_backup = $True
+			$output = "`r`nERROR: Could not create log ZIP file. Will try to attach the unziped log file and hope it's not to big.`r`n$_`r`n"
+			$emailBody = "$emailBody`r`n$output`r`n"
+			echo $output
+			$output | Out-File $log_file  -encoding ASCII -append
+			$attachment = New-Object System.Net.Mail.Attachment("$log_file" )
+		}		
 	}
 
 	
@@ -293,7 +318,7 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 		$EmailSubject = "ERROR - $EmailSubject"
 	}
 	$SMTPMessage = New-Object System.Net.Mail.MailMessage($emailFrom,$emailTo,$emailSubject,$emailBody)
-	$attachment = New-Object System.Net.Mail.Attachment("$zipFilePath" )
+	
 	$SMTPMessage.Attachments.Add($attachment)
 	$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPServer, $SMTPPort) 
 	if ($NoSMTPOverSSL -eq $False) {
@@ -301,7 +326,14 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	}
 
 	$SMTPClient.Credentials = New-Object System.Net.NetworkCredential($SMTPUser, $SMTPPassword); 
-	$SMTPClient.Send($SMTPMessage)
+	try {
+		$SMTPClient.Send($SMTPMessage)
+	} catch {
+		$output = "ERROR: Could not send Email.`r`n$_`r`n"
+		echo $output
+		$output | Out-File $log_file -append	
+	}
+	
 	$attachment.Dispose()
 	echo "done"
 }
