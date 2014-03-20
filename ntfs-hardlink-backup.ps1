@@ -105,6 +105,7 @@ If (Test-Path $log_file){
 		$output = "ERROR: Could not delete old log file`r`n$_`r`n"
 		$emailBody = "$emailBody`r`n$output`r`n"
 		echo $output
+		$error_during_backup = $True
 	}
 }
 
@@ -117,8 +118,9 @@ catch
 	$output = "ERROR: Could not create new log file`r`n$_`r`n"
 	$emailBody = "$emailBody`r`n$output`r`n"
 	echo $output
+	$log_file=$False
+	$error_during_backup = $True
 }
-
 
 foreach($backup_source in $backupSources)
 {
@@ -153,7 +155,9 @@ foreach($backup_source in $backupSources)
 			$emailBody = "$emailBody`r`n$output`r`n"
 			$error_during_backup = $true
 			echo $output 
-			$output | Out-File $log_file -encoding ASCII -append
+			if ($log_file) {
+				$output | Out-File $log_file -encoding ASCII -append
+			}
 			$backup_source_path = $backup_source
 			$NoShadowCopy = $True
 		}
@@ -199,32 +203,37 @@ foreach($backup_source in $backupSources)
 		}
 	}
 	
+	if ($log_file) {
+		$logFileCommandAppend = " >> $log_file"
+	}
+	
 	if ($lastBackupFolderName -eq "" ) {
 		echo "full copy"
+
 		#echo "$script_path\..\ln.exe $traditionalArgument $excludeString --copy `"$backup_source_path`" `"$actualBackupDestination`"    >> $log_file"
-		`cmd /c  "$script_path\..\ln.exe $traditionalArgument $excludeString --copy `"$backup_source_path`" `"$actualBackupDestination`"    >> $log_file"`
-	
+		`cmd /c  "$script_path\..\ln.exe $traditionalArgument $excludeString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
 	} else {
 		if ($timeTolerance -ne 0) {
 			$timeToleranceArgument = " --timetolerance $timeTolerance "
 		} else {
 			$timeToleranceArgument = ""
 		}
-	
-		
+			
 		echo "Delorian copy against $lastBackupFolderName"
+		
 		#echo "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument $excludeString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"
-		`cmd /c  "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument $excludeString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"`	
+		`cmd /c  "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument $excludeString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"`	
 	}
 	
 	$summary = ""
-	$backup_response = get-content "$log_file" 
-	#TODO catch warnings and errors during delorian copy
-	foreach( $line in $backup_response.length..1 ){
-		$summary =  $backup_response[$line] + "`n" + $summary		
-		if ($backup_response[$line] -match '.*Total\s+Copied\s+Linked\s+Skipped.*\s+Excluded\s+Failed.*') {
-
-			break
+	if ($log_file) {
+		$backup_response = get-content "$log_file" 
+		#TODO catch warnings and errors during delorian copy
+		foreach( $line in $backup_response.length..1 ){
+			$summary =  $backup_response[$line] + "`n" + $summary		
+			if ($backup_response[$line] -match '.*Total\s+Copied\s+Linked\s+Skipped.*\s+Excluded\s+Failed.*') {
+				break
+			}
 		}
 	}
 
@@ -263,14 +272,18 @@ foreach($backup_source in $backupSources)
 	{
 		$folderToDelete =  $backupDestination +"\"+ $lastBackupFolders[$backupsDeleted].Name
 		echo "Deleting $folderToDelete"
-		"`r`nDeleting $folderToDelete" | Out-File $log_file  -encoding ASCII -append
+		if ($log_file) {
+			"`r`nDeleting $folderToDelete" | Out-File $log_file  -encoding ASCII -append
+		}
 		Remove-Item $folderToDelete -recurse
 		$backupsDeleted++
 	}
 	
 	$summary = "`nDeleted $backupsDeleted old backup(s)`n"
 	echo $summary
-	$summary | Out-File $log_file  -encoding ASCII -append
+	if ($log_file) {
+		$summary | Out-File $log_file  -encoding ASCII -append
+	}
 
 	$emailBody = $emailBody + $summary
 	
@@ -279,47 +292,49 @@ foreach($backup_source in $backupSources)
 
 if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	echo "============Sending Email============"
+	if ($log_file) {
+		$zipFilePath = "$log_file.zip"
+		$fileToZip = get-item $log_file
 
-	$zipFilePath = "$log_file.zip"
-	$fileToZip = get-item $log_file
-
-	If (Test-Path $zipFilePath){
-		try
-		{
-			Remove-Item "$zipFilePath" -erroraction stop
-			if (-not (test-path $zipFilePath)) { 
-			  set-content $zipFilePath ("PK" + [char]5 + [char]6 + ("$([char]0)" * 18)) 
-			} 
-
-			$ZipFile = (new-object -com shell.application).NameSpace($zipFilePath) 
-			$zipfile.CopyHere($fileToZip.fullname)	
-			
-			$timeSlept = 0
-			while ($zipfile.Items().Count -le 0 -AND $timeSlept -le $maxMsToSleepForZipCreation )
+		If (Test-Path $zipFilePath){
+			try
 			{
-				Start-sleep -milliseconds $msToWaitDuringZipCreation
-				$timeSlept = $timeSlept + $msToWaitDuringZipCreation
-			}			
-			$attachment = New-Object System.Net.Mail.Attachment("$zipFilePath" )
-		}
-		catch
-		{
-			$error_during_backup = $True
-			$output = "`r`nERROR: Could not create log ZIP file. Will try to attach the unziped log file and hope it's not to big.`r`n$_`r`n"
-			$emailBody = "$emailBody`r`n$output`r`n"
-			echo $output
-			$output | Out-File $log_file  -encoding ASCII -append
-			$attachment = New-Object System.Net.Mail.Attachment("$log_file" )
-		}		
-	}
+				Remove-Item "$zipFilePath" -erroraction stop
+				if (-not (test-path $zipFilePath)) { 
+				  set-content $zipFilePath ("PK" + [char]5 + [char]6 + ("$([char]0)" * 18)) 
+				} 
 
+				$ZipFile = (new-object -com shell.application).NameSpace($zipFilePath) 
+				$zipfile.CopyHere($fileToZip.fullname)	
+				
+				$timeSlept = 0
+				while ($zipfile.Items().Count -le 0 -AND $timeSlept -le $maxMsToSleepForZipCreation )
+				{
+					Start-sleep -milliseconds $msToWaitDuringZipCreation
+					$timeSlept = $timeSlept + $msToWaitDuringZipCreation
+				}			
+				$attachment = New-Object System.Net.Mail.Attachment("$zipFilePath" )
+			}
+			catch
+			{
+				$error_during_backup = $True
+				$output = "`r`nERROR: Could not create log ZIP file. Will try to attach the unziped log file and hope it's not to big.`r`n$_`r`n"
+				$emailBody = "$emailBody`r`n$output`r`n"
+				echo $output
+				$output | Out-File $log_file  -encoding ASCII -append
+				$attachment = New-Object System.Net.Mail.Attachment("$log_file" )
+			}		
+		}
+	}
 	
 	if ($error_during_backup) {
 		$EmailSubject = "ERROR - $EmailSubject"
 	}
 	$SMTPMessage = New-Object System.Net.Mail.MailMessage($emailFrom,$emailTo,$emailSubject,$emailBody)
 	
-	$SMTPMessage.Attachments.Add($attachment)
+	if ($log_file) {
+		$SMTPMessage.Attachments.Add($attachment)
+	}
 	$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPServer, $SMTPPort) 
 	if ($NoSMTPOverSSL -eq $False) {
 		$SMTPClient.EnableSsl = $True
@@ -331,9 +346,14 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	} catch {
 		$output = "ERROR: Could not send Email.`r`n$_`r`n"
 		echo $output
-		$output | Out-File $log_file -append	
+		if ($log_file) {
+			$output | Out-File $log_file -append
+		}
 	}
 	
-	$attachment.Dispose()
+	if ($log_file) {
+		$attachment.Dispose()
+	}
+	
 	echo "done"
 }
