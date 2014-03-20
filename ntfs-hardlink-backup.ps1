@@ -18,6 +18,8 @@
 .PARAMETER timeTolerance
     Sometimes useful to not have an exact timestamp comparison bewteen source and dest, but kind of a fuzzy comparison, because the systemtime of NAS drives is not exactly synced with the host.
 	To overcome this we use the -timeTolerance switch to specify a value in milliseconds 
+.PARAMETER exclude
+	Exclude files via wildcards. Can be a list separated by comma
 .PARAMETER traditional
 	Some NAS boxes only support a very outdated version of the SMB protocol. SMB is used when network drives are connected. This old version of SMB in certain situations does not support the fast enumeration methods of ln.exe, which causes ln.exe to simply do nothing.
 	To overcome this use the -traditional switch, which forces ln.exe to enumerate files the old, but a little slower way
@@ -47,8 +49,8 @@
     Backup with more than one source
 .NOTES
     Author: Artur Neumann *INFN*
-    Date:   March 18 2014
-	Version: 1.0_rc3
+    Date:   March 19 2014
+	Version: 1.0_rc4
 #>
 
 [CmdletBinding()]
@@ -80,12 +82,15 @@ Param(
    [Parameter(Mandatory=$False)]
    [switch]$traditional,    
    [Parameter(Mandatory=$False)]
-   [string]$emailSubject="Backup" 
+   [string]$emailSubject="Backup",
+   [Parameter(Mandatory=$False)]
+   [String[]]$exclude 
 )
 
 $emailBody = ""
 $error_during_backup = $false
-
+$maxMsToSleepForZipCreation = 1000*60*30
+$msToWaitDuringZipCreation = 500
 
 $script_path = Split-Path -parent $MyInvocation.MyCommand.Definition
 $log_file="$script_path\backup.log"
@@ -113,25 +118,31 @@ foreach($backup_source in $backupSources)
 		try {
 			$s1 = (gwmi -List Win32_ShadowCopy).Create("$backup_source_drive_letter\", "ClientAccessible")
 			$s2 = gwmi Win32_ShadowCopy | ? { $_.ID -eq $s1.ShadowID }
+
+			$id = $s2.ID
+			echo "Shadow Volume ID: $id"
+			echo "Shadow Volume DeviceObject: $s2.DeviceObject"
+			
+			$shadowCopies = Get-WMIObject -Class Win32_ShadowCopy 
+
+			echo "done`n"
+
+			$backup_source_path = $s2.DeviceObject+$backup_source_path		
 		}
 		catch { 
+		#ToDo get the real error message
+		#ToDo put $output to logfile
+		#ToDo proceed without Shadow Copy
 			$output = "ERROR: Could not create Shadow Copy`r`n"
 			$emailBody = "$emailBody`r`n$output`r`n$_ `r`n"
 			$error_during_backup = $true
 			echo $output  $_
+			$backup_source_path = $backup_source
+			echo "ATTENTION: Skipping creation of Shadow Volume Copy. ATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
+
 		}
 		
-		$id = $s2.ID
-		echo "Shadow Volume ID: $id"
-		echo "Shadow Volume DeviceObject: $s2.DeviceObject"
-		
-		
-		$shadowCopies = Get-WMIObject -Class Win32_ShadowCopy 
 
-		cmd /c mklink /d "$backup_source_drive_letter\shadowcopy_$id" "$s2.DeviceObject"
-		echo "done`n"
-
-		$backup_source_path = $s2.DeviceObject+$backup_source_path
 	}
 	else { 
 		echo "$stepCounter. Skipping creation of Shadow Volume Copy. ATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
@@ -164,10 +175,19 @@ foreach($backup_source in $backupSources)
 		$traditionalArgument = ""
 	}	
 	
+	$excludeString=" "
+	foreach($item in $exclude)
+	{
+		if ($item -AND $item.Trim())
+		{
+			$excludeString = "$excludeString --exclude $item "
+		}
+	}
+	
 	if ($lastBackupFolderName -eq "" ) {
 		echo "full copy"
-		#echo "$script_path\..\ln.exe $traditionalArgument --copy `"$backup_source_path`" `"$actualBackupDestination`"  >> $log_file"
-		`cmd /c  "$script_path\..\ln.exe $traditionalArgument --copy `"$backup_source_path`" `"$actualBackupDestination`"  >> $log_file"`
+		#echo "$script_path\..\ln.exe $traditionalArgument $excludeString --copy `"$backup_source_path`" `"$actualBackupDestination`"    >> $log_file"
+		`cmd /c  "$script_path\..\ln.exe $traditionalArgument $excludeString --copy `"$backup_source_path`" `"$actualBackupDestination`"    >> $log_file"`
 	
 	} else {
 		if ($timeTolerance -ne 0) {
@@ -178,8 +198,8 @@ foreach($backup_source in $backupSources)
 	
 		
 		echo "Delorian copy against $lastBackupFolderName"
-		#echo "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"
-		`cmd /c  "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"`
+		#echo "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument $excludeString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"
+		`cmd /c  "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument $excludeString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $log_file"`
 	
 	
 	}
@@ -246,11 +266,34 @@ foreach($backup_source in $backupSources)
 if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	echo "============Sending Email============"
 
+	$zipFilePath = "$log_file.zip"
+	$fileToZip = get-item $log_file
+
+	If (Test-Path $zipFilePath){
+		#TODO check for permission error
+		Remove-Item $zipFilePath
+	}
+
+	if (-not (test-path $zipFilePath)) { 
+	  set-content $zipFilePath ("PK" + [char]5 + [char]6 + ("$([char]0)" * 18)) 
+	} 
+
+	$ZipFile = (new-object -com shell.application).NameSpace($zipFilePath) 
+	$zipfile.CopyHere($fileToZip.fullname)	
+	
+	$timeSlept = 0
+	while ($zipfile.Items().Count -le 0 -AND $timeSlept -le $maxMsToSleepForZipCreation )
+	{
+		Start-sleep -milliseconds $msToWaitDuringZipCreation
+		$timeSlept = $timeSlept + $msToWaitDuringZipCreation
+	}
+
+	
 	if ($error_during_backup) {
 		$EmailSubject = "ERROR - $EmailSubject"
 	}
 	$SMTPMessage = New-Object System.Net.Mail.MailMessage($emailFrom,$emailTo,$emailSubject,$emailBody)
-	$attachment = New-Object System.Net.Mail.Attachment("$log_file" )
+	$attachment = New-Object System.Net.Mail.Attachment("$zipFilePath" )
 	$SMTPMessage.Attachments.Add($attachment)
 	$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPServer, $SMTPPort) 
 	if ($NoSMTPOverSSL -eq $False) {
