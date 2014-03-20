@@ -174,18 +174,19 @@ foreach($backup_source in $backupSources)
 	echo "Source: $backup_source_path"
 	echo "Destination: $actualBackupDestination"
 
-
-	$oldBackupItems = Get-ChildItem -Path $backupDestination
 	$lastBackupFolderName = ""
 	$lastBackupFolders = @()
-	# get me the last backup if any
-	foreach ($item in $oldBackupItems)
-	{
-		if ($item.Attributes -eq "Directory" -AND $item.Name  -match '^'+$backup_source_folder+' - \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' )
+	If (Test-Path $backupDestination){
+		$oldBackupItems = Get-ChildItem -Path $backupDestination
+		# get me the last backup if any
+		foreach ($item in $oldBackupItems)
 		{
-			$lastBackupFolderName = $item.Name
-			$lastBackupFolders += $item
-		}
+			if ($item.Attributes -eq "Directory" -AND $item.Name  -match '^'+$backup_source_folder+' - \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' )
+			{
+				$lastBackupFolderName = $item.Name
+				$lastBackupFolders += $item
+			}
+		}		
 	}
 	
 	if ($traditional -eq $True) {
