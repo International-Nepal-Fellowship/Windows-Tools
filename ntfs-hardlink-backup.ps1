@@ -19,7 +19,7 @@
 .PARAMETER backupDestination
     Where the data should go to.
 .PARAMETER backupsToKeep
-    How many backup copies should be kept. All older copies will be deleted. Default=50
+    How many backup copies should be kept. All older copies will be deleted. 1 means mirror. Default=50
 .PARAMETER timeTolerance
     Sometimes useful to not have an exact timestamp comparison bewteen source and dest, but kind of a fuzzy comparison, because the systemtime of NAS drives is not exactly synced with the host.
 	To overcome this we use the -timeTolerance switch to specify a value in milliseconds 
@@ -130,7 +130,13 @@ foreach($backup_source in $backupSources)
 	$backup_source_path =  split-path $backup_source -noQualifier
 	$backup_source_folder =  split-path $backup_source -leaf
 	$dateTime = get-date -f "yyyy-MM-dd HH-mm-ss"
-	$actualBackupDestination = "$backupDestination\$backup_source_folder - $dateTime"
+	
+	$actualBackupDestination = "$backupDestination\$backup_source_folder"
+	#if the user want to keep just one backup we do a mirror without any date, so we don't need
+	#to copy files that are already there
+	if ($backupsToKeep -gt 1) {
+		$actualBackupDestination = "$actualBackupDestination - $dateTime"
+	}
 
 	echo "============Creating Backup of $backup_source============" 
 	if ($NoShadowCopy -eq $False) {
@@ -268,9 +274,10 @@ foreach($backup_source in $backupSources)
 	echo "`n"
 	
 	echo  "$stepCounter. Deleting Old Backups ..."
-	$backupsToDelete=$lastBackupFolders.length - $backupsToKeep
+	#plus 1 because we just created a new backup
+	$backupsToDelete=$lastBackupFolders.length + 1 - $backupsToKeep 
 	$backupsDeleted = 0
-	while ($backupsDeleted -le $backupsToDelete)
+	while ($backupsDeleted -lt $backupsToDelete)
 	{
 		$folderToDelete =  $backupDestination +"\"+ $lastBackupFolders[$backupsDeleted].Name
 		echo "Deleting $folderToDelete"
