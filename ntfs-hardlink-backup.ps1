@@ -89,7 +89,7 @@ Param(
    [Parameter(Mandatory=$False)]
    [switch]$traditional,    
    [Parameter(Mandatory=$False)]
-   [string]$emailSubject="Backup",
+   [string]$emailSubject="",
    [Parameter(Mandatory=$False)]
    [String[]]$exclude, 
    [Parameter(Mandatory=$False)]
@@ -100,6 +100,10 @@ $emailBody = ""
 $error_during_backup = $false
 $maxMsToSleepForZipCreation = 1000*60*30
 $msToWaitDuringZipCreation = 500
+
+if ([string]::IsNullOrEmpty($emailSubject)) {
+	$emailSubject = "Backup of: {0} by: {1}" -f $(Get-WmiObject Win32_Computersystem).name, [Environment]::UserName
+}
 
 $script_path = Split-Path -parent $MyInvocation.MyCommand.Definition
 if ([string]::IsNullOrEmpty($LogFile)) {
