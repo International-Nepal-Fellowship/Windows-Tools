@@ -10,7 +10,7 @@
 	5. Right Click on the ntfs-hardlink-backup.ps1 file and select "Properties"
 	6. If you see in the bottom something like "Security: This file came from an other computer ..." Click on "Unblock"
 	7. start powershell from windows start menu (you need Windows 7 or Win Server for that, on XP you would need to install PowerShell 2 first)
-	8. allow local non-signed scripts to run by typing “Set-ExecutionPolicy RemoteSigned“
+	8. allow local non-signed scripts to run by typing "Set-ExecutionPolicy RemoteSigned"
 	9. run ntfs-hardlink-backup.ps1 with full path
 .SYNOPSIS
 	c:\full\path\bat\ntfs-hardlink-backup.ps1 <Options>
@@ -106,30 +106,16 @@ if ([string]::IsNullOrEmpty($LogFile)) {
 	$LogFile="$script_path\backup.log"
 }
 
-If (Test-Path $LogFile){
-	try
-	{
-		Remove-Item $LogFile -erroraction stop
-	}
-	catch
-	{
-		$output = "ERROR: Could not delete old log file`r`n$_`r`n"
-		$emailBody = "$emailBody`r`n$output`r`n"
-		echo $output
-		$error_during_backup = $True
-	}
-}
-
 try
 {
-	New-Item $LogFile -type file -force | Out-Null
+	New-Item $LogFile -type file -force -erroraction stop | Out-Null
 }
 catch
 {
 	$output = "ERROR: Could not create new log file`r`n$_`r`n"
 	$emailBody = "$emailBody`r`n$output`r`n"
 	echo $output
-	$LogFile=$False
+	$LogFile=""
 	$error_during_backup = $True
 }
 
