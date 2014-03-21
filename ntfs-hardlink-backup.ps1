@@ -353,7 +353,7 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 		$output = "ERROR: Could not send Email.`r`n$_`r`n"
 		echo $output
 		if ($log_file) {
-			$output | Out-File $log_file -append
+			$output | Out-File $log_file -encoding ASCII -append
 		}
 	}
 	
