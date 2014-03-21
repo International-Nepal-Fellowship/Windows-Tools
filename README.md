@@ -14,9 +14,9 @@ FEATURES
 * delete old backups
 * Keeping min old backups per year / per month (TODO)
 * configuration file (TODO)
-* option for choosing logfile path (TODO)
 * try to run ln.exe from path (TODO)
 * option to choose where ln.exe lives (TODO)
+* multiple Email receptient (TODO)
 
 INSTALLATION
 -------------
