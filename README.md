@@ -17,6 +17,7 @@ FEATURES
 * try to run ln.exe from path (TODO)
 * option to choose where ln.exe lives (TODO)
 * multiple Email receptient (TODO)
+* keep historical log files (TODO)
 
 INSTALLATION
 -------------
