@@ -130,7 +130,11 @@ if (($backupDestinationArray[0] -eq "") -and ($backupDestinationArray[1] -eq "")
 	# The destination is a UNC path (file share)
 	$backupDestinationTop = "\\" + $backupDestinationArray[2] + "\" + $backupDestinationArray[3] + "\"
 } else {
-	# Hopefully the destination is on an ordinary drive letter
+	if (-not ($backupDestination -match ":")) {
+		# No drive letter specified. This could be an attempt at a relative path, so first resolve it to the full path.
+		# This allows us to use split-path -Qualifier below to get the actual drive letter
+		$backupDestination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($backupDestination)
+	}
 	$backupDestinationTop = split-path $backupDestination -Qualifier
 	$backupDestinationTop = $backupDestinationTop + "\"
 }
@@ -146,7 +150,11 @@ if (test-path $backupDestinationTop) {
 				# The source is a UNC path (file share) which has no drive letter. We cannot do volume shadowing from that.
 				$backup_source_drive_letter = ""
 			} else {
-				# Hopefully the source is on an ordinary drive letter
+				if (-not ($backup_source -match ":")) {
+					# No drive letter specified. This could be an attempt at a relative path, so first resolve it to the full path.
+					# This allows us to use split-path -Qualifier below to get the actual drive letter
+					$backup_source = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($backup_source)
+				}
 				$backup_source_drive_letter = split-path $backup_source -Qualifier
 				$backup_source_path =  split-path $backup_source -noQualifier
 			}
