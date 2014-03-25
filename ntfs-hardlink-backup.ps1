@@ -237,13 +237,21 @@ if (test-path $backupDestinationTop) {
 					}
 				} else {
 					# We were asked to do shadow copy but the source is a UNC path.
-					echo "$stepCounter. Skipping creation of Shadow Volume Copy because source is a UNC path. `r`nATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
+					$output = "Skipping creation of Shadow Volume Copy because source is a UNC path. `r`nATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
+					echo "$stepCounter $output"
+					if ($LogFile) {
+						$output | Out-File $LogFile -encoding ASCII -append
+					}					
 					$stepCounter++
 					$backup_source_path = $backup_source
 				}
 			}
 			else {
-				echo "$stepCounter. Skipping creation of Shadow Volume Copy. `r`nATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
+				$output = "Skipping creation of Shadow Volume Copy. `r`nATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
+				echo "$stepCounter $output"
+				if ($LogFile) {
+					$output | Out-File $LogFile -encoding ASCII -append
+				}					
 				$stepCounter++
 				$backup_source_path = $backup_source
 			}
@@ -373,7 +381,7 @@ if (test-path $backupDestinationTop) {
 				$shadowCopy.Delete()
 				}
 			catch {
-				$output = "ERROR: Could not delete Shadow Copy"
+				$output = "ERROR: Could not delete Shadow Copy. "
 				$emailBody = $emailBody + $output + $_
 				$error_during_backup = $true
 				echo $output  $_
