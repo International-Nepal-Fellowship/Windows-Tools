@@ -205,14 +205,13 @@ if (test-path $backupDestinationTop) {
 							$s1 = (gwmi -List Win32_ShadowCopy).Create("$backup_source_drive_letter\", "ClientAccessible")
 							$s2 = gwmi Win32_ShadowCopy | ? { $_.ID -eq $s1.ShadowID }
 
-							$id = $s2.ID
 							if ($s1.ReturnValue -ne 0 -OR !$s2)
 							{
 								#ToDo add explanation of return codes http://msdn.microsoft.com/en-us/library/aa389391%28v=vs.85%29.aspx
 								throw "Shadow Copy Creation failed. Return Code: " + $s1.ReturnValue
 							}
 							
-							echo "Shadow Volume ID: $id"
+							echo "Shadow Volume ID: $($s2.ID)"
 							echo "Shadow Volume DeviceObject: $s2.DeviceObject"
 
 							$shadowCopies = Get-WMIObject -Class Win32_ShadowCopy
