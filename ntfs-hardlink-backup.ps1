@@ -212,7 +212,7 @@ if (test-path $backupDestinationTop) {
 							}
 							
 							echo "Shadow Volume ID: $($s2.ID)"
-							echo "Shadow Volume DeviceObject: $s2.DeviceObject"
+							echo "Shadow Volume DeviceObject: $($s2.DeviceObject)"
 
 							$shadowCopies = Get-WMIObject -Class Win32_ShadowCopy
 
