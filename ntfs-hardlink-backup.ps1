@@ -38,6 +38,8 @@
     Username if the SMTP Server needs authentication.
 .PARAMETER SMTPPassword
     Password if the SMTP Server needs authentication.
+.PARAMETER SMTPTimeout
+    Timeout in ms for the Email to be send. Default 60000.
 .PARAMETER NoSMTPOverSSL
     Switch off the use of SSL to send Emails.
 .PARAMETER NoShadowCopy
@@ -56,8 +58,7 @@
     Backup with more than one source.
 .NOTES
     Author: Artur Neumann *INFN*
-    Date:   March 21 2014
-	Version: 1.0_rc5
+	Version: 1.0_rc6
 #>
 
 [CmdletBinding()]
@@ -84,6 +85,8 @@ Param(
    [switch]$NoShadowCopy=$False,
    [Parameter(Mandatory=$False)]
    [Int32]$SMTPPort=587,
+   [Parameter(Mandatory=$False)]
+   [Int32]$SMTPTimeout=60000,
    [Parameter(Mandatory=$False)]
    [Int32]$timeTolerance=0,
    [Parameter(Mandatory=$False)]
@@ -447,11 +450,14 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 		$SMTPMessage.Attachments.Add($attachment)
 	}
 	$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPServer, $SMTPPort)
+	
+	$SMTPClient.Timeout = $SMTPTimeout
 	if ($NoSMTPOverSSL -eq $False) {
 		$SMTPClient.EnableSsl = $True
 	}
 
 	$SMTPClient.Credentials = New-Object System.Net.NetworkCredential($SMTPUser, $SMTPPassword);
+		
 	try {
 		$SMTPClient.Send($SMTPMessage)
 	} catch {
