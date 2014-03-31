@@ -48,6 +48,10 @@
     Port of the SMTP Server. Default=587
 .PARAMETER emailSubject
     Subject for the notification Email.
+.PARAMETER emailSendRetries
+    How often should we try to resend the Email. Default = 100
+.PARAMETER msToPauseBetweenEmailSendRetries
+    Time in ms to wait between the resending of the Email. Default = 60000
 .PARAMETER LogFile
     Path and filename for the logfile. If none is given backup.log in the script source is used.
 .EXAMPLE
@@ -57,8 +61,8 @@
     PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources "D:\backup_source1","c:\backup_source2" -backupDestination E:\backup_dest -emailTo "me@address.org" -emailFrom "backup@ocompany.rg" -SMTPServer company.org -SMTPUser "backup@company.org" -SMTPPassword "secr4et"
     Backup with more than one source.
 .NOTES
-    Author: Artur Neumann *INFN*
-	Version: 1.0_rc6
+    Author: Artur Neumann, Phil Davis *INFN*
+	Version: 1.0_rc7
 #>
 
 [CmdletBinding()]
@@ -87,6 +91,10 @@ Param(
    [Int32]$SMTPPort=587,
    [Parameter(Mandatory=$False)]
    [Int32]$SMTPTimeout=60000,
+   [Parameter(Mandatory=$False)]
+   [Int32]$emailSendRetries=100,
+   [Parameter(Mandatory=$False)]
+   [Int32]$msToPauseBetweenEmailSendRetries=60000,
    [Parameter(Mandatory=$False)]
    [Int32]$timeTolerance=0,
    [Parameter(Mandatory=$False)]
@@ -457,14 +465,23 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	}
 
 	$SMTPClient.Credentials = New-Object System.Net.NetworkCredential($SMTPUser, $SMTPPassword);
+	
+	$emailSendSucess = $False
+	while ($emailSendRetries -gt 0 -AND !$emailSendSucess)	{
+		try {
+			$emailSendRetries--
+			$SMTPClient.Send($SMTPMessage)
+			$emailSendSucess = $True
+		} catch {
+			$output = "ERROR: Could not send Email.`r`n$_`r`n"
+			echo $output
+			if ($LogFile) {
+				$output | Out-File $LogFile -encoding ASCII -append
+			}
+		}
 		
-	try {
-		$SMTPClient.Send($SMTPMessage)
-	} catch {
-		$output = "ERROR: Could not send Email.`r`n$_`r`n"
-		echo $output
-		if ($LogFile) {
-			$output | Out-File $LogFile -encoding ASCII -append
+		if (!$emailSendSucess)	{
+			Start-sleep -milliseconds $msToPauseBetweenEmailSendRetries
 		}
 	}
 
