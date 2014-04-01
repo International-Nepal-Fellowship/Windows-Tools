@@ -28,6 +28,9 @@
 .PARAMETER traditional
 	Some NAS boxes only support a very outdated version of the SMB protocol. SMB is used when network drives are connected. This old version of SMB in certain situations does not support the fast enumeration methods of ln.exe, which causes ln.exe to simply do nothing.
 	To overcome this use the -traditional switch, which forces ln.exe to enumerate files the old, but a little slower way.
+.PARAMETER localSubnetOnly
+    Switch on to only run the backup when the destination is a local disk or a server in the same subnet.
+	This is useful for scheduled network backups that should only run when the laptop is on the home office network.
 .PARAMETER emailTo
     Address to be notified about success and problems. If not given no Emails will be sent.
 .PARAMETER emailFrom
@@ -54,6 +57,8 @@
     Time in ms to wait between the resending of the Email. Default = 60000
 .PARAMETER LogFile
     Path and filename for the logfile. If none is given backup.log in the script source is used.
+.PARAMETER StepTiming
+    Switch on display of the time at each step of the job.
 .EXAMPLE
     PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources D:\backup_source1 -backupDestination E:\backup_dest -emailTo "me@address.org" -emailFrom "backup@ocompany.rg" -SMTPServer company.org -SMTPUser "backup@company.org" -SMTPPassword "secr4et"
     Simple backup.
@@ -100,19 +105,27 @@ Param(
    [Parameter(Mandatory=$False)]
    [switch]$traditional,
    [Parameter(Mandatory=$False)]
+   [switch]$localSubnetOnly,
+   [Parameter(Mandatory=$False)]
    [string]$emailSubject="",
    [Parameter(Mandatory=$False)]
    [String[]]$exclude,
    [Parameter(Mandatory=$False)]
-   [string]$LogFile=""
+   [string]$LogFile="",
+   [Parameter(Mandatory=$False)]
+   [switch]$StepTiming=$False
 )
 
 $emailBody = ""
 $error_during_backup = $false
+$doBackup = $true
 $maxMsToSleepForZipCreation = 1000*60*30
 $msToWaitDuringZipCreation = 500
 $shadow_drive_letter = ""
 $num_shadow_copies = 0
+$stepTime = ""
+$backupMappedPath = ""
+$backupHostName = ""
 
 if ([string]::IsNullOrEmpty($emailSubject)) {
 	$emailSubject = "Backup of: {0} by: {1}" -f $(Get-WmiObject Win32_Computersystem).name, [Environment]::UserName
@@ -137,21 +150,75 @@ catch
 }
 
 $backupDestinationArray = $backupDestination.split("\")
+
 if (($backupDestinationArray[0] -eq "") -and ($backupDestinationArray[1] -eq "")) {
 	# The destination is a UNC path (file share)
 	$backupDestinationTop = "\\" + $backupDestinationArray[2] + "\" + $backupDestinationArray[3] + "\"
+	$backupMappedPath = $backupDestinationTop
+	$backupHostName = $backupDestinationArray[2]
 } else {
 	if (-not ($backupDestination -match ":")) {
 		# No drive letter specified. This could be an attempt at a relative path, so first resolve it to the full path.
 		# This allows us to use split-path -Qualifier below to get the actual drive letter
 		$backupDestination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($backupDestination)
 	}
-	$backupDestinationTop = split-path $backupDestination -Qualifier
-	$backupDestinationTop = $backupDestinationTop + "\"
+	$backupDestinationDrive = split-path $backupDestination -Qualifier
+	$backupDestinationTop = $backupDestinationDrive + "\"
+	# See if the disk letter is mapped to a file share somewhere.
+	$backupDriveObject = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$backupDestinationDrive'"
+	$backupMappedPath = $backupDriveObject.ProviderName
+	if ($backupMappedPath) {
+		$backupPathArray = $backupMappedPath.split("\")
+		if (($backupPathArray[0] -eq "") -and ($backupPathArray[1] -eq "")) {
+			# The underlying destination is a UNC path (file share)
+			$backupHostName = $backupPathArray[2]
+		}
+	} else {
+		# Maybe the user did a "subst" command. Check for that.
+		$subst = (Subst) | findstr "$backupDestinationDrive\\"
+		# Looks like R:\: => UNC\hostname.myoffice.company.org\sharename
+		$parts = $subst -Split "UNC\\"
+		if ($parts) {
+			$host_FQDN = $parts[1].split("\")[0]
+			if ($host_FQDN) {
+				$backupHostName = $host_FQDN
+				$backupMappedPath = "\\" + $parts[1]
+			}
+		}
+	}
+}
+
+if (($localSubnetOnly -eq $True) -and ($backupHostName)) {
+	# Check that the name is in the same subnet as us. 
+	# Note: This also works if the user gives a real IPv4 like "\\10.20.30.40\backupshare"
+	# $backupHostName would be 10.20.30.40 in that case.
+	# TODO: Handle IPv6 addresses also some day.
+	$doBackup = $false
+	try {
+		$destinationIpAddresses = [System.Net.Dns]::GetHostAddresses($backupHostName)
+		[IPAddress]$destinationIp = $destinationIpAddresses[0]
+
+		$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
+
+		foreach ($adapter in $localAdapters){
+			[IPAddress]$IPv4Address = $adapter.IPAddress[0]
+			[IPAddress]$mask = $adapter.IPSubnet[0]
+
+			if (($IPv4address.address -band $mask.address) -eq ($destinationIp.address -band $mask.address)) {
+				$doBackup = $true
+			} 
+		}
+	}
+	catch {
+		$output = "ERROR: Could not get IP address for destination $backupDestination mapped to $backupMappedPath"
+		$emailBody = "$emailBody`r`n$output`r`n$_"
+		$error_during_backup = $true
+		echo $output  $_
+	}
 }
 
 # Just test for the existence of the top of the backup destination. "ln" will create any folders as needed, as long as the top exists.
-if (test-path $backupDestinationTop) {
+if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 	foreach($backup_source in $backupSources)
 	{
 		if (test-path $backup_source) {
@@ -185,7 +252,10 @@ if (test-path $backupDestinationTop) {
 				# We can try processing a shadow copy.
 					if ($shadow_drive_letter -eq $backup_source_drive_letter) {
 						# The previous shadow copy must have succeeded because $NoShadowCopy is still false, and we are looping around with a matching shadow drive letter.
-						echo "$stepCounter. Re-using previous Shadow Volume Copy..."
+						if ($StepTiming -eq $True) {
+							$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+						}
+						echo "$stepCounter. $stepTime Re-using previous Shadow Volume Copy..."
 						$stepCounter++
 						$backup_source_path = $s2.DeviceObject+$backup_source_path
 					} else {
@@ -193,14 +263,17 @@ if (test-path $backupDestinationTop) {
 							# Delete the previous shadow copy that was from some other drive letter
 							foreach ($shadowCopy in $shadowCopies){
 							if ($s2.ID -eq $shadowCopy.ID) {
-								echo  "$stepCounter. Deleting previous Shadow Copy ..."
+								if ($StepTiming -eq $True) {
+									$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+								}
+								echo  "$stepCounter. $stepTime Deleting previous Shadow Copy ..."
 								$stepCounter++
 								try {
 									$shadowCopy.Delete()
-									}
+								}
 								catch {
 									$output = "ERROR: Could not delete Shadow Copy"
-									$emailBody = $emailBody + $output + $_
+									$emailBody = "$emailBody`r`n$output`r`n$_"
 									$error_during_backup = $true
 									echo $output  $_
 								}
@@ -210,7 +283,10 @@ if (test-path $backupDestinationTop) {
 								}
 							}
 						}
-						echo "$stepCounter. Creating Shadow Volume Copy..."
+						if ($StepTiming -eq $True) {
+							$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+						}
+						echo "$stepCounter. $stepTime Creating Shadow Volume Copy..."
 						$stepCounter++
 						try {
 							$s1 = (gwmi -List Win32_ShadowCopy).Create("$backup_source_drive_letter\", "ClientAccessible")
@@ -248,7 +324,10 @@ if (test-path $backupDestinationTop) {
 				} else {
 					# We were asked to do shadow copy but the source is a UNC path.
 					$output = "Skipping creation of Shadow Volume Copy because source is a UNC path. `r`nATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
-					echo "$stepCounter $output"
+					if ($StepTiming -eq $True) {
+						$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+					}
+					echo "$stepCounter. $stepTime $output"
 					if ($LogFile) {
 						$output | Out-File $LogFile -encoding ASCII -append
 					}					
@@ -258,7 +337,10 @@ if (test-path $backupDestinationTop) {
 			}
 			else {
 				$output = "Skipping creation of Shadow Volume Copy. `r`nATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
-				echo "$stepCounter $output"
+				if ($StepTiming -eq $True) {
+					$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+				}
+				echo "$stepCounter. $stepTime $output"
 				if ($LogFile) {
 					$output | Out-File $LogFile -encoding ASCII -append
 				}					
@@ -266,7 +348,10 @@ if (test-path $backupDestinationTop) {
 				$backup_source_path = $backup_source
 			}
 
-			echo "$stepCounter. Running backup..."
+			if ($StepTiming -eq $True) {
+				$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+			}
+			echo "$stepCounter. $stepTime Running backup..."
 			$stepCounter++
 			echo "Source: $backup_source_path"
 			echo "Destination: $actualBackupDestination"
@@ -305,6 +390,8 @@ if (test-path $backupDestinationTop) {
 				$logFileCommandAppend = " >> $LogFile"
 			}
 
+			$start_time = get-date -f "yyyy-MM-dd HH-mm-ss"
+
 			if ($lastBackupFolderName -eq "" ) {
 				echo "full copy"
 
@@ -337,14 +424,17 @@ if (test-path $backupDestinationTop) {
 
 			echo "done`n"
 
-			$summary = "`n------Summary-----`nBackup FROM: $backup_source TO: $backupDestination`n" + $summary
+			$summary = "`n------Summary-----`nBackup AT: $start_time FROM: $backup_source TO: $backupDestination`n" + $summary
 			echo $summary
 
 			$emailBody = $emailBody + $summary
 
 			echo "`n"
 
-			echo  "$stepCounter. Deleting old backups ..."
+			if ($StepTiming -eq $True) {
+				$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+			}
+			echo  "$stepCounter. $stepTime Deleting old backups ..."
 			$stepCounter++
 			#plus 1 because we just created a new backup
 			$backupsToDelete=$lastBackupFolders.length + 1 - $backupsToKeep
@@ -385,14 +475,17 @@ if (test-path $backupDestinationTop) {
 		# Delete the last shadow copy
 		foreach ($shadowCopy in $shadowCopies){
 		if ($s2.ID -eq $shadowCopy.ID) {
-			echo  "$stepCounter. Deleting last Shadow Copy ..."
+			if ($StepTiming -eq $True) {
+				$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+			}
+			echo  "$stepCounter. $stepTime Deleting last Shadow Copy ..."
 			$stepCounter++
 			try {
 				$shadowCopy.Delete()
-				}
+			}
 			catch {
 				$output = "ERROR: Could not delete Shadow Copy. "
-				$emailBody = $emailBody + $output + $_
+				$emailBody = "$emailBody`r`n$output`r`n$_"
 				$error_during_backup = $true
 				echo $output  $_
 			}
@@ -404,8 +497,18 @@ if (test-path $backupDestinationTop) {
 	}
 
 } else {
-	# The destination drive or \\server\share does not exist.
-	$output = "ERROR: Destination drive or share does not exist - backup NOT done`r`n"
+	if ($doBackup -eq $True) {
+		# The destination drive or \\server\share does not exist.
+		$output = "ERROR: Destination drive or share does not exist - backup NOT done`r`n"
+	} else {
+		# The backup was not done because localSubnetOnly was on, and the destination \\server\share is not in the local subnet.
+		if ($backupMappedPath -ne "") {
+			$backupMappedString = " (" + $backupMappedPath + ")"
+		} else {
+			$backupMappedString = ""
+		}
+		$output = "ERROR: Destination share $backupDestinationTop$backupMappedString is not in a local subnet - backup NOT done`r`n"
+	}
 	$emailBody = "$emailBody`r`n$output`r`n"
 	$error_during_backup = $true
 	echo $output
@@ -416,7 +519,14 @@ if (test-path $backupDestinationTop) {
 
 if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	echo "============Sending Email============"
+	$stepCounter = 1
+
 	if ($LogFile) {
+		if ($StepTiming -eq $True) {
+			$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+		}
+		echo  "$stepCounter. $stepTime Zipping log file..."
+		$stepCounter++
 		$zipFilePath = "$LogFile.zip"
 		$fileToZip = get-item $LogFile
 
@@ -467,13 +577,21 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	$SMTPClient.Credentials = New-Object System.Net.NetworkCredential($SMTPUser, $SMTPPassword);
 	
 	$emailSendSucess = $False
+	if ($StepTiming -eq $True) {
+		$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+	}
+	echo  "$stepCounter. $stepTime Sending email..."
+	$stepCounter++
 	while ($emailSendRetries -gt 0 -AND !$emailSendSucess)	{
 		try {
 			$emailSendRetries--
 			$SMTPClient.Send($SMTPMessage)
 			$emailSendSucess = $True
 		} catch {
-			$output = "ERROR: Could not send Email.`r`n$_`r`n"
+			if ($StepTiming -eq $True) {
+				$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+			}
+			$output = "ERROR: $stepTime Could not send Email.`r`n$_`r`n"
 			echo $output
 			if ($LogFile) {
 				$output | Out-File $LogFile -encoding ASCII -append
