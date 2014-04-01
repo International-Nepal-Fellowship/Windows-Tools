@@ -54,6 +54,8 @@
     Time in ms to wait between the resending of the Email. Default = 60000
 .PARAMETER LogFile
     Path and filename for the logfile. If none is given backup.log in the script source is used.
+.PARAMETER StepTiming
+    Switch on display of the time at each step of the job.
 .EXAMPLE
     PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources D:\backup_source1 -backupDestination E:\backup_dest -emailTo "me@address.org" -emailFrom "backup@ocompany.rg" -SMTPServer company.org -SMTPUser "backup@company.org" -SMTPPassword "secr4et"
     Simple backup.
@@ -104,7 +106,9 @@ Param(
    [Parameter(Mandatory=$False)]
    [String[]]$exclude,
    [Parameter(Mandatory=$False)]
-   [string]$LogFile=""
+   [string]$LogFile="",
+   [Parameter(Mandatory=$False)]
+   [switch]$StepTiming=$False
 )
 
 $emailBody = ""
@@ -113,6 +117,7 @@ $maxMsToSleepForZipCreation = 1000*60*30
 $msToWaitDuringZipCreation = 500
 $shadow_drive_letter = ""
 $num_shadow_copies = 0
+$stepTime = ""
 
 if ([string]::IsNullOrEmpty($emailSubject)) {
 	$emailSubject = "Backup of: {0} by: {1}" -f $(Get-WmiObject Win32_Computersystem).name, [Environment]::UserName
@@ -185,7 +190,10 @@ if (test-path $backupDestinationTop) {
 				# We can try processing a shadow copy.
 					if ($shadow_drive_letter -eq $backup_source_drive_letter) {
 						# The previous shadow copy must have succeeded because $NoShadowCopy is still false, and we are looping around with a matching shadow drive letter.
-						echo "$stepCounter. Re-using previous Shadow Volume Copy..."
+						if ($StepTiming -eq $True) {
+							$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+						}
+						echo "$stepCounter. $stepTime Re-using previous Shadow Volume Copy..."
 						$stepCounter++
 						$backup_source_path = $s2.DeviceObject+$backup_source_path
 					} else {
@@ -193,7 +201,10 @@ if (test-path $backupDestinationTop) {
 							# Delete the previous shadow copy that was from some other drive letter
 							foreach ($shadowCopy in $shadowCopies){
 							if ($s2.ID -eq $shadowCopy.ID) {
-								echo  "$stepCounter. Deleting previous Shadow Copy ..."
+								if ($StepTiming -eq $True) {
+									$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+								}
+								echo  "$stepCounter. $stepTime Deleting previous Shadow Copy ..."
 								$stepCounter++
 								try {
 									$shadowCopy.Delete()
@@ -210,7 +221,10 @@ if (test-path $backupDestinationTop) {
 								}
 							}
 						}
-						echo "$stepCounter. Creating Shadow Volume Copy..."
+						if ($StepTiming -eq $True) {
+							$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+						}
+						echo "$stepCounter. $stepTime Creating Shadow Volume Copy..."
 						$stepCounter++
 						try {
 							$s1 = (gwmi -List Win32_ShadowCopy).Create("$backup_source_drive_letter\", "ClientAccessible")
@@ -248,7 +262,10 @@ if (test-path $backupDestinationTop) {
 				} else {
 					# We were asked to do shadow copy but the source is a UNC path.
 					$output = "Skipping creation of Shadow Volume Copy because source is a UNC path. `r`nATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
-					echo "$stepCounter $output"
+					if ($StepTiming -eq $True) {
+						$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+					}
+					echo "$stepCounter. $stepTime $output"
 					if ($LogFile) {
 						$output | Out-File $LogFile -encoding ASCII -append
 					}					
@@ -258,7 +275,10 @@ if (test-path $backupDestinationTop) {
 			}
 			else {
 				$output = "Skipping creation of Shadow Volume Copy. `r`nATTENTION: if files are changed during the backup process, they might end up being corrupted in the backup!`n"
-				echo "$stepCounter $output"
+				if ($StepTiming -eq $True) {
+					$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+				}
+				echo "$stepCounter. $stepTime $output"
 				if ($LogFile) {
 					$output | Out-File $LogFile -encoding ASCII -append
 				}					
@@ -266,7 +286,10 @@ if (test-path $backupDestinationTop) {
 				$backup_source_path = $backup_source
 			}
 
-			echo "$stepCounter. Running backup..."
+			if ($StepTiming -eq $True) {
+				$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+			}
+			echo "$stepCounter. $stepTime Running backup..."
 			$stepCounter++
 			echo "Source: $backup_source_path"
 			echo "Destination: $actualBackupDestination"
@@ -305,6 +328,8 @@ if (test-path $backupDestinationTop) {
 				$logFileCommandAppend = " >> $LogFile"
 			}
 
+			$start_time = get-date -f "yyyy-MM-dd HH-mm-ss"
+
 			if ($lastBackupFolderName -eq "" ) {
 				echo "full copy"
 
@@ -337,14 +362,17 @@ if (test-path $backupDestinationTop) {
 
 			echo "done`n"
 
-			$summary = "`n------Summary-----`nBackup FROM: $backup_source TO: $backupDestination`n" + $summary
+			$summary = "`n------Summary-----`nBackup AT: $start_time FROM: $backup_source TO: $backupDestination`n" + $summary
 			echo $summary
 
 			$emailBody = $emailBody + $summary
 
 			echo "`n"
 
-			echo  "$stepCounter. Deleting old backups ..."
+			if ($StepTiming -eq $True) {
+				$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+			}
+			echo  "$stepCounter. $stepTime Deleting old backups ..."
 			$stepCounter++
 			#plus 1 because we just created a new backup
 			$backupsToDelete=$lastBackupFolders.length + 1 - $backupsToKeep
@@ -385,7 +413,10 @@ if (test-path $backupDestinationTop) {
 		# Delete the last shadow copy
 		foreach ($shadowCopy in $shadowCopies){
 		if ($s2.ID -eq $shadowCopy.ID) {
-			echo  "$stepCounter. Deleting last Shadow Copy ..."
+			if ($StepTiming -eq $True) {
+				$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+			}
+			echo  "$stepCounter. $stepTime Deleting last Shadow Copy ..."
 			$stepCounter++
 			try {
 				$shadowCopy.Delete()
@@ -416,7 +447,14 @@ if (test-path $backupDestinationTop) {
 
 if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	echo "============Sending Email============"
+	$stepCounter = 1
+
 	if ($LogFile) {
+		if ($StepTiming -eq $True) {
+			$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+		}
+		echo  "$stepCounter. $stepTime Zipping log file..."
+		$stepCounter++
 		$zipFilePath = "$LogFile.zip"
 		$fileToZip = get-item $LogFile
 
@@ -467,13 +505,21 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	$SMTPClient.Credentials = New-Object System.Net.NetworkCredential($SMTPUser, $SMTPPassword);
 	
 	$emailSendSucess = $False
+	if ($StepTiming -eq $True) {
+		$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+	}
+	echo  "$stepCounter. $stepTime Sending email..."
+	$stepCounter++
 	while ($emailSendRetries -gt 0 -AND !$emailSendSucess)	{
 		try {
 			$emailSendRetries--
 			$SMTPClient.Send($SMTPMessage)
 			$emailSendSucess = $True
 		} catch {
-			$output = "ERROR: Could not send Email.`r`n$_`r`n"
+			if ($StepTiming -eq $True) {
+				$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+			}
+			$output = "ERROR: $stepTime Could not send Email.`r`n$_`r`n"
 			echo $output
 			if ($LogFile) {
 				$output | Out-File $LogFile -encoding ASCII -append
