@@ -365,11 +365,11 @@ if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 			$lastBackupFolderName = ""
 			$lastBackupFolders = @()
 			If (Test-Path $backupDestination){
-				$oldBackupItems = Get-ChildItem -Path $backupDestination
+				$oldBackupItems = Get-ChildItem -Force -Path $backupDestination
 				# get me the last backup if any
 				foreach ($item in $oldBackupItems)
 				{
-					if ($item.Attributes -eq "Directory" -AND $item.Name  -match '^'+$backup_source_folder+' - \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' )
+					if ($item.Attributes -match "Directory" -AND $item.Name  -match '^'+$backup_source_folder+' - \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' )
 					{
 						$lastBackupFolderName = $item.Name
 						$lastBackupFolders += $item
