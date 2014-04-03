@@ -201,12 +201,18 @@ if (($localSubnetOnly -eq $True) -and ($backupHostName)) {
 		$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
 
 		foreach ($adapter in $localAdapters){
-			[IPAddress]$IPv4Address = $adapter.IPAddress[0]
-			[IPAddress]$mask = $adapter.IPSubnet[0]
+			# Belts and braces here - we have seen some systems that returned unusual adapters that had IPaddress 0.0.0.0 and no IPsubnet
+			# We want to ignore that sort of rubbish - the mask comparisons do not work.
+			if ($adapter.IPAddress[0]) {
+				[IPAddress]$IPv4Address = $adapter.IPAddress[0]
+				if ($adapter.IPSubnet[0]) {
+					[IPAddress]$mask = $adapter.IPSubnet[0]
 
-			if (($IPv4address.address -band $mask.address) -eq ($destinationIp.address -band $mask.address)) {
-				$doBackup = $true
-			} 
+					if (($IPv4address.address -band $mask.address) -eq ($destinationIp.address -band $mask.address)) {
+						$doBackup = $true
+					}
+				}
+			}
 		}
 	}
 	catch {
