@@ -49,8 +49,10 @@
     Switch off the use of Shadow Copies. Can be useful if you have no permissions to create Shadow Copies.
 .PARAMETER SMTPPort
     Port of the SMTP Server. Default=587
+.PARAMETER emailJobName
+    This is added in to the auto-generated email subject "Backup of: hostname emailJobName by: username"
 .PARAMETER emailSubject
-    Subject for the notification Email.
+    Subject for the notification Email. This overrides the auto-generated email subject and emailJobName.
 .PARAMETER emailSendRetries
     How often should we try to resend the Email. Default = 100
 .PARAMETER msToPauseBetweenEmailSendRetries
@@ -109,6 +111,8 @@ Param(
    [Parameter(Mandatory=$False)]
    [string]$emailSubject="",
    [Parameter(Mandatory=$False)]
+   [string]$emailJobName="",
+   [Parameter(Mandatory=$False)]
    [String[]]$exclude,
    [Parameter(Mandatory=$False)]
    [string]$LogFile="",
@@ -128,7 +132,10 @@ $backupMappedPath = ""
 $backupHostName = ""
 
 if ([string]::IsNullOrEmpty($emailSubject)) {
-	$emailSubject = "Backup of: {0} by: {1}" -f $(Get-WmiObject Win32_Computersystem).name, [Environment]::UserName
+	if (-not ([string]::IsNullOrEmpty($emailJobName))) {
+		$emailJobName += " "
+	}
+	$emailSubject = "Backup of: {0} ${emailJobName}by: {1}" -f $(Get-WmiObject Win32_Computersystem).name, [Environment]::UserName
 }
 
 $script_path = Split-Path -parent $MyInvocation.MyCommand.Definition
@@ -430,7 +437,7 @@ if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 
 			echo "done`n"
 
-			$summary = "`n------Summary-----`nBackup AT: $start_time FROM: $backup_source TO: $backupDestination`n" + $summary
+			$summary = "`n------Summary-----`nBackup AT: $start_time FROM: $backup_source TO: $backupDestination $backupMappedPath`n" + $summary
 			echo $summary
 
 			$emailBody = $emailBody + $summary
