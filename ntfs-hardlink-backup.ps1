@@ -28,6 +28,12 @@
 .PARAMETER traditional
 	Some NAS boxes only support a very outdated version of the SMB protocol. SMB is used when network drives are connected. This old version of SMB in certain situations does not support the fast enumeration methods of ln.exe, which causes ln.exe to simply do nothing.
 	To overcome this use the -traditional switch, which forces ln.exe to enumerate files the old, but a little slower way.
+.PARAMETER noads
+	The -noads option tells ln.exe not to copy Alternative Data Streams (ADS) of files and directories. 
+	This option can be useful if the destination supports NTFS, but can not deal with ADS, which happens on certain NAS drives.
+.PARAMETER noea
+	The -noea option tells ln.exe not to copy EA Records of files and directories. 
+	This option can be useful if the destination supports NTFS, but can not deal with EA Records, which happens on certain NAS drives.
 .PARAMETER localSubnetOnly
     Switch on to only run the backup when the destination is a local disk or a server in the same subnet.
 	This is useful for scheduled network backups that should only run when the laptop is on the home office network.
@@ -106,6 +112,10 @@ Param(
    [Int32]$timeTolerance=0,
    [Parameter(Mandatory=$False)]
    [switch]$traditional,
+   [Parameter(Mandatory=$False)]
+   [switch]$noads,
+   [Parameter(Mandatory=$False)]
+   [switch]$noea,
    [Parameter(Mandatory=$False)]
    [switch]$localSubnetOnly,
    [Parameter(Mandatory=$False)]
@@ -390,6 +400,24 @@ if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 				$traditionalArgument = ""
 			}
 
+			if ($noads -eq $True) {
+				$noadsArgument = " --noads "
+			} else {
+				$noadsArgument = ""
+			}
+
+			if ($noea -eq $True) {
+				$noeaArgument = " --noea "
+			} else {
+				$noeaArgument = ""
+			}
+
+			if ($timeTolerance -ne 0) {
+				$timeToleranceArgument = " --timetolerance $timeTolerance "
+			} else {
+				$timeToleranceArgument = ""
+			}
+
 			$excludeString=" "
 			foreach($item in $exclude)
 			{
@@ -398,6 +426,8 @@ if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 					$excludeString = "$excludeString --exclude $item "
 				}
 			}
+			
+			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeString"
 
 			if ($LogFile) {
 				$logFileCommandAppend = " >> $LogFile"
@@ -408,19 +438,13 @@ if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 			if ($lastBackupFolderName -eq "" ) {
 				echo "full copy"
 
-				#echo "$script_path\..\ln.exe $traditionalArgument $excludeString --copy `"$backup_source_path`" `"$actualBackupDestination`"    >> $LogFile"
-				`cmd /c  "$script_path\..\ln.exe $traditionalArgument $excludeString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
+				#echo "$script_path\..\ln.exe $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    >> $LogFile"
+				`cmd /c  "$script_path\..\ln.exe $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
 			} else {
-				if ($timeTolerance -ne 0) {
-					$timeToleranceArgument = " --timetolerance $timeTolerance "
-				} else {
-					$timeToleranceArgument = ""
-				}
-
 				echo "Delorian copy against $lastBackupFolderName"
 
-				#echo "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument $excludeString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $LogFile"
-				`cmd /c  "$script_path\..\ln.exe $traditionalArgument $timeToleranceArgument $excludeString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"`
+				#echo "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $LogFile"
+				`cmd /c  "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"`
 			}
 
 			$summary = ""
@@ -459,7 +483,7 @@ if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 				if ($LogFile) {
 					"`r`nDeleting $folderToDelete" | Out-File $LogFile  -encoding ASCII -append
 				}
-				Remove-Item $folderToDelete -recurse
+				Remove-Item $folderToDelete -Recurse -Force
 				$backupsDeleted++
 			}
 
