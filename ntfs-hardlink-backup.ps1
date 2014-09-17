@@ -479,27 +479,30 @@ if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 			}
 			#plus 1 because we just created a new backup
 			$backupsToDelete=$lastBackupFolders.length + 1 - $backupsToKeep
-			echo  "$stepCounter. $stepTime Deleting $backupsToDelete old backup(s) ..."
-			$stepCounter++
-			if ($LogFile) {
-				"`r`nDeleting $backupsToDelete old backup(s)" | Out-File $LogFile  -encoding ASCII -append
-			}
-			$backupsDeleted = 0
-			while ($backupsDeleted -lt $backupsToDelete)
+			if ($backupsToDelete -gt 0)
 			{
-				$folderToDelete =  $backupDestination +"\"+ $lastBackupFolders[$backupsDeleted].Name
-				echo "Deleting $folderToDelete"
+				echo  "$stepCounter. $stepTime Deleting $backupsToDelete old backup(s) ..."
+				$stepCounter++
 				if ($LogFile) {
-					"`r`nDeleting $folderToDelete" | Out-File $LogFile  -encoding ASCII -append
+					"`r`nDeleting $backupsToDelete old backup(s)" | Out-File $LogFile  -encoding ASCII -append
 				}
-				$backupsDeleted++
-				`cmd /c  "$script_path\..\ln.exe --deeppathdelete `"$folderToDelete`" $logFileCommandAppend"`
-			}
+				$backupsDeleted = 0
+				while ($backupsDeleted -lt $backupsToDelete)
+				{
+					$folderToDelete =  $backupDestination +"\"+ $lastBackupFolders[$backupsDeleted].Name
+					echo "Deleting $folderToDelete"
+					if ($LogFile) {
+						"`r`nDeleting $folderToDelete" | Out-File $LogFile  -encoding ASCII -append
+					}
+					$backupsDeleted++
+					`cmd /c  "$script_path\..\ln.exe --deeppathdelete `"$folderToDelete`" $logFileCommandAppend"`
+				}
 
-			$summary = "`nDeleted $backupsDeleted old backup(s)`n"
-			echo $summary
-			if ($LogFile) {
-				$summary | Out-File $LogFile  -encoding ASCII -append
+				$summary = "`nDeleted $backupsDeleted old backup(s)`n"
+				echo $summary
+				if ($LogFile) {
+					$summary | Out-File $LogFile  -encoding ASCII -append
+				}
 			}
 
 			$emailBody = $emailBody + $summary
