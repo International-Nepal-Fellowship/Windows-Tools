@@ -656,16 +656,17 @@ if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 	}
 
 } else {
+	if ($backupMappedPath) {
+		$backupMappedString = " (" + $backupMappedPath + ")"
+	} else {
+		$backupMappedString = ""
+	}
+
 	if ($doBackup -eq $True) {
 		# The destination drive or \\server\share does not exist.
-		$output = "ERROR: Destination drive or share does not exist - backup NOT done`r`n"
+		$output = "ERROR: Destination drive or share $backupDestinationTop$backupMappedString does not exist - backup NOT done`r`n"
 	} else {
 		# The backup was not done because localSubnetOnly was on, and the destination \\server\share is not in the local subnet.
-		if ($backupMappedPath -ne "") {
-			$backupMappedString = " (" + $backupMappedPath + ")"
-		} else {
-			$backupMappedString = ""
-		}
 		$output = "ERROR: Destination share $backupDestinationTop$backupMappedString is not in a local subnet - backup NOT done`r`n"
 	}
 	$emailBody = "$emailBody`r`n$output`r`n"
