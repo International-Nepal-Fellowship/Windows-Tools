@@ -6,12 +6,13 @@ The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.h
 So all credit goes to [Hermann Schinagl](http://schinagl.priv.at)!
 FEATURES
 --------
-* backuping multiple sources in one destination
-* creating Shadow Volume copy before making backup
-* sending notification emails
+* backup multiple sources to one destination
+* create Shadow Volume copy before making backup
+* send notification emails
 * takes extra options for ln (timetolerance, traditional, exclude)
 * creates ZIP file of the logfile before sending it by Email
-* delete old backups
+* delete old backups and log files\
+* optionally read parameters from an INI file
 
 INSTALLATION
 -------------
