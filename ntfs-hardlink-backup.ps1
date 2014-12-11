@@ -80,7 +80,7 @@
     Backup with more than one source.
 .NOTES
     Author: Artur Neumann, Phil Davis *INFN*
-	Version: 1.0_rc9
+	Version: 1.0
 #>
 
 [CmdletBinding()]
