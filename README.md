@@ -12,8 +12,8 @@ FEATURES
 * takes extra options for ln (timetolerance, traditional, exclude)
 * creates ZIP file of the logfile before sending it by Email
 * delete old backups
+* optionally read parameters from an INI file
 * Keeping min old backups per year / per month (TODO)
-* configuration file (TODO)
 * try to run ln.exe from path (TODO)
 * option to choose where ln.exe lives (TODO)
 * multiple Email receptient (TODO)
