@@ -11,7 +11,7 @@ FEATURES
 * send notification emails
 * takes extra options for ln (timetolerance, traditional, exclude)
 * creates ZIP file of the logfile before sending it by Email
-* delete old backups and log files\
+* delete old backups and log files
 * optionally read parameters from an INI file
 
 INSTALLATION
