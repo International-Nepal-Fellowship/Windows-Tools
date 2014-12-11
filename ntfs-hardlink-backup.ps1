@@ -14,6 +14,8 @@
 	9. run ntfs-hardlink-backup.ps1 with full path
 .SYNOPSIS
 	c:\full\path\bat\ntfs-hardlink-backup.ps1 <Options>
+.PARAMETER iniFile
+	Path to an optional INI file that contains any of the parameters.
 .PARAMETER backupSources
     Source path of the backup. Can be a list separated by comma.
 .PARAMETER backupDestination
@@ -80,17 +82,19 @@
     Backup with more than one source.
 .NOTES
     Author: Artur Neumann, Phil Davis *INFN*
-	Version: 1.0_rc9
+	Version: 2.0
 #>
 
 [CmdletBinding()]
 Param(
-	[Parameter(Mandatory=$True)]
+	[Parameter(Mandatory=$False)]
+	[String]$iniFile,
+	[Parameter(Mandatory=$False)]
 	[String[]]$backupSources,
-	[Parameter(Mandatory=$True)]
+	[Parameter(Mandatory=$False)]
 	[String]$backupDestination,
 	[Parameter(Mandatory=$False)]
-	[Int32]$backupsToKeep=50,
+	[Int32]$backupsToKeep,
 	[Parameter(Mandatory=$False)]
 	[string]$emailTo="",
 	[Parameter(Mandatory=$False)]
@@ -106,15 +110,15 @@ Param(
 	[Parameter(Mandatory=$False)]
 	[switch]$NoShadowCopy=$False,
 	[Parameter(Mandatory=$False)]
-	[Int32]$SMTPPort=587,
+	[Int32]$SMTPPort,
 	[Parameter(Mandatory=$False)]
-	[Int32]$SMTPTimeout=60000,
+	[Int32]$SMTPTimeout,
 	[Parameter(Mandatory=$False)]
-	[Int32]$emailSendRetries=100,
+	[Int32]$emailSendRetries,
 	[Parameter(Mandatory=$False)]
-	[Int32]$msToPauseBetweenEmailSendRetries=60000,
+	[Int32]$msToPauseBetweenEmailSendRetries,
 	[Parameter(Mandatory=$False)]
-	[Int32]$timeTolerance=0,
+	[Int32]$timeTolerance,
 	[Parameter(Mandatory=$False)]
 	[switch]$traditional,
 	[Parameter(Mandatory=$False)]
@@ -124,7 +128,7 @@ Param(
 	[Parameter(Mandatory=$False)]
 	[switch]$localSubnetOnly,
 	[Parameter(Mandatory=$False)]
-	[Int32]$localSubnetMask=0,
+	[Int32]$localSubnetMask,
 	[Parameter(Mandatory=$False)]
 	[string]$emailSubject="",
 	[Parameter(Mandatory=$False)]
@@ -137,6 +141,193 @@ Param(
 	[switch]$StepTiming=$False
 )
 
+Function Get-IniContent 
+{ 
+    <# 
+    .Synopsis 
+        Gets the content of an INI file 
+         
+    .Description 
+        Gets the content of an INI file and returns it as a hashtable 
+         
+    .Notes 
+        Author    : Oliver Lipkau <oliver@lipkau.net> 
+        Blog      : http://oliver.lipkau.net/blog/ 
+        Date      : 2014/06/23 
+        Version   : 1.1 
+         
+        #Requires -Version 2.0 
+         
+    .Inputs 
+        System.String 
+         
+    .Outputs 
+        System.Collections.Hashtable 
+         
+    .Parameter FilePath 
+        Specifies the path to the input file. 
+         
+    .Example 
+        $FileContent = Get-IniContent "C:\myinifile.ini" 
+        ----------- 
+        Description 
+        Saves the content of the c:\myinifile.ini in a hashtable called $FileContent 
+     
+    .Example 
+        $inifilepath | $FileContent = Get-IniContent 
+        ----------- 
+        Description 
+        Gets the content of the ini file passed through the pipe into a hashtable called $FileContent 
+     
+    .Example 
+        C:\PS>$FileContent = Get-IniContent "c:\settings.ini" 
+        C:\PS>$FileContent["Section"]["Key"] 
+        ----------- 
+        Description 
+        Returns the key "Key" of the section "Section" from the C:\settings.ini file 
+         
+    .Link 
+        Out-IniFile 
+    #> 
+     
+    [CmdletBinding()] 
+    Param( 
+        [ValidateNotNullOrEmpty()] 
+        [ValidateScript({(Test-Path $_) -and ((Get-Item $_).Extension -eq ".ini")})] 
+        [Parameter(ValueFromPipeline=$True,Mandatory=$True)] 
+        [string]$FilePath 
+    ) 
+     
+    Begin 
+        {Write-Verbose "$($MyInvocation.MyCommand.Name):: Function started"} 
+         
+    Process 
+    { 
+        Write-Verbose "$($MyInvocation.MyCommand.Name):: Processing file: $Filepath" 
+             
+        $ini = @{} 
+        switch -regex -file $FilePath 
+        { 
+            "^\[(.+)\]$" # Section 
+            { 
+                $section = $matches[1] 
+				# Added ToLower line to make INI file case-insensitive - Phil Davis
+				$section = $section.ToLower()
+                $ini[$section] = @{} 
+                $CommentCount = 0 
+            } 
+            "^(;.*)$" # Comment 
+            { 
+                if (!($section)) 
+                { 
+                    $section = "No-Section" 
+                    $ini[$section] = @{} 
+                } 
+                $value = $matches[1] 
+                $CommentCount = $CommentCount + 1 
+                $name = "Comment" + $CommentCount 
+                $ini[$section][$name] = $value 
+            }  
+            "(.+?)\s*=\s*(.*)" # Key 
+            { 
+                if (!($section)) 
+                { 
+                    $section = "No-Section" 
+                    $ini[$section] = @{} 
+                } 
+                $name,$value = $matches[1..2] 
+				# Added ToLower line to make INI file case-insensitive - Phil Davis
+				$name = $name.ToLower()
+                $ini[$section][$name] = $value 
+            } 
+        } 
+        Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing file: $FilePath" 
+        Return $ini 
+    } 
+         
+    End 
+        {Write-Verbose "$($MyInvocation.MyCommand.Name):: Function ended"} 
+}
+
+Function Get-IniParameter
+{
+	# Note: iniFileContent hash table is not passed in each time.
+	# Just use the global value to reference that.
+	[CmdletBinding()]
+	Param(
+		[ValidateNotNullOrEmpty()]
+		[Parameter(Mandatory=$True)]
+		[string]$ParameterName,
+		[ValidateNotNullOrEmpty()]
+		[Parameter(Mandatory=$True)]
+		[string]$IniSection
+	)
+
+	Begin
+		{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function started"}
+
+	Process
+    {
+		Write-Verbose "$($MyInvocation.MyCommand.Name):: Processing for IniSection: $IniSection and ParameterName: $ParameterName"
+
+		# Use ToLower to make all parameter name comparisons case-insensitive
+		$ParameterName = $ParameterName.ToLower()
+		$ParameterValue = $Null
+
+		if ($global:iniFileContent.ContainsKey("common")) {
+			if (-not [string]::IsNullOrEmpty($global:iniFileContent["common"][$ParameterName])) {
+				$ParameterValue = $global:iniFileContent["common"][$ParameterName]
+			}
+		}
+		if ($global:iniFileContent.ContainsKey($IniSection)) {
+			if (-not [string]::IsNullOrEmpty($global:iniFileContent[$IniSection][$ParameterName])) {
+				$ParameterValue = $global:iniFileContent[$IniSection][$ParameterName]
+			}
+		}
+
+		Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing for IniSection: $IniSection and ParameterName: $ParameterName ParameterValue: $ParameterValue"
+		Return $ParameterValue
+    }
+
+    End
+	{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function ended"}
+}
+
+Function Is-TrueString
+{
+	# Pass in a string (or nothing) and return a boolean deciding if the string
+	# is "1", "true", "t" (True) or otherwise it is (False)
+	[CmdletBinding()]
+	Param(
+		[Parameter(Mandatory=$False)]
+		[string]$TruthString
+	)
+
+	Begin
+		{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function started"}
+
+	Process
+    {
+		Write-Verbose "$($MyInvocation.MyCommand.Name):: Processing for TruthString: $TruthString"
+
+		# Use ToLower to make comparisons case-insensitive
+		$TruthString = $TruthString.ToLower()
+		$ParameterValue = $Null
+
+		if (($TruthString -eq "t") -or ($TruthString -eq "true") -or ($TruthString -eq "1")) {
+			$TruthValue = $True
+		} else {
+			$TruthValue = $False
+		}
+
+		Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing for TruthString: $TruthString TruthValue: $TruthValue"
+		Return $TruthValue
+    }
+
+    End
+	{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function ended"}
+}
+
 $emailBody = ""
 $error_during_backup = $false
 $doBackup = $true
@@ -148,12 +339,167 @@ $stepTime = ""
 $backupMappedPath = ""
 $backupHostName = ""
 $deleteOldLogFiles = $False
+$FQDN = [System.Net.DNS]::GetHostByName('').HostName
+$userName = [Environment]::UserName
+
+if ($iniFile) {
+	if (Test-Path -Path $iniFile -PathType leaf) {
+		$output = "Using ini file`r`n$iniFile`r`n"
+		$emailBody = "$emailBody`r`n$output`r`n"
+		echo $output
+		$global:iniFileContent = Get-IniContent "${iniFile}"
+	} else {
+		$global:iniFileContent = @{}
+		$output = "ERROR: Could not find ini file`r`n$iniFile`r`n"
+		$emailBody = "$emailBody`r`n$output`r`n"
+		echo $output
+	}
+} else {
+		$global:iniFileContent = @{}
+}
+
+$parameters_ok = $True
+
+if ([string]::IsNullOrEmpty($backupSources)) {
+	$backupsourcelist = Get-IniParameter "backupsources" "${FQDN}"
+	if (-not [string]::IsNullOrEmpty($backupsourcelist)) {
+		$backupSources = $backupsourcelist.split(",")
+	}
+}
+
+if ([string]::IsNullOrEmpty($backupDestination)) {
+	$backupDestination = Get-IniParameter "backupdestination" "${FQDN}"
+}
+
+if ($backupsToKeep -eq 0) {
+	$backupsToKeep = Get-IniParameter "backupstokeep" "${FQDN}"
+	if ($backupsToKeep -eq 0) {
+		$backupsToKeep = 50;
+	}
+}
+
+if ([string]::IsNullOrEmpty($emailTo)) {
+	$emailTo = Get-IniParameter "emailTo" "${FQDN}"
+}
+
+if ([string]::IsNullOrEmpty($emailFrom)) {
+	$emailFrom = Get-IniParameter "emailFrom" "${FQDN}"
+}
+
+if ([string]::IsNullOrEmpty($SMTPServer)) {
+	$SMTPServer = Get-IniParameter "SMTPServer" "${FQDN}"
+}
+
+if ([string]::IsNullOrEmpty($SMTPUser)) {
+	$SMTPUser = Get-IniParameter "SMTPUser" "${FQDN}"
+}
+
+if ([string]::IsNullOrEmpty($SMTPPassword)) {
+	$SMTPPassword = Get-IniParameter "SMTPPassword" "${FQDN}"
+}
+
+if (-not $NoSMTPOverSSL.IsPresent) {
+	$IniFileString = Get-IniParameter "NoSMTPOverSSL" "${FQDN}"
+	$NoSMTPOverSSL = Is-TrueString "${IniFileString}"
+}
+
+if (-not $NoShadowCopy.IsPresent) {
+	$IniFileString = Get-IniParameter "NoShadowCopy" "${FQDN}"
+	$NoShadowCopy = Is-TrueString "${IniFileString}"
+}
+
+if ($SMTPPort -eq 0) {
+	$SMTPPort = Get-IniParameter "SMTPPort" "${FQDN}"
+	if ($SMTPPort -eq 0) {
+		$SMTPPort = 587;
+	}
+}
+
+if ($SMTPTimeout -eq 0) {
+	$SMTPTimeout = Get-IniParameter "SMTPTimeout" "${FQDN}"
+	if ($SMTPTimeout -eq 0) {
+		$SMTPTimeout = 60000;
+	}
+}
+
+if ($emailSendRetries -eq 0) {
+	$emailSendRetries = Get-IniParameter "emailSendRetries" "${FQDN}"
+	if ($emailSendRetries -eq 0) {
+		$emailSendRetries = 100;
+	}
+}
+
+if ($msToPauseBetweenEmailSendRetries -eq 0) {
+	$msToPauseBetweenEmailSendRetries = Get-IniParameter "msToPauseBetweenEmailSendRetries" "${FQDN}"
+	if ($msToPauseBetweenEmailSendRetries -eq 0) {
+		$msToPauseBetweenEmailSendRetries = 60000;
+	}
+}
+
+if ($timeTolerance -eq 0) {
+	$timeTolerance = Get-IniParameter "timeTolerance" "${FQDN}"
+	if ($timeTolerance -eq 0) {
+		# Looks dumb, but left here if you want to change the default from zero.
+		$timeTolerance = 0;
+	}
+}
+
+if (-not $traditional.IsPresent) {
+	$IniFileString = Get-IniParameter "traditional" "${FQDN}"
+	$traditional = Is-TrueString "${IniFileString}"
+}
+
+if (-not $noads.IsPresent) {
+	$IniFileString = Get-IniParameter "noads" "${FQDN}"
+	$noads = Is-TrueString "${IniFileString}"
+}
+
+if (-not $noea.IsPresent) {
+	$IniFileString = Get-IniParameter "noea" "${FQDN}"
+	$noea = Is-TrueString "${IniFileString}"
+}
+
+if (-not $localSubnetOnly.IsPresent) {
+	$IniFileString = Get-IniParameter "localSubnetOnly" "${FQDN}"
+	$localSubnetOnly = Is-TrueString "${IniFileString}"
+}
+
+if ($localSubnetMask -eq 0) {
+	$localSubnetMask = Get-IniParameter "localSubnetMask" "${FQDN}"
+	if ($localSubnetMask -eq 0) {
+		$localSubnetMask = 0;
+	}
+}
+
+if ([string]::IsNullOrEmpty($emailSubject)) {
+	$emailSubject = Get-IniParameter "emailSubject" "${FQDN}"
+}
+
+if ([string]::IsNullOrEmpty($emailJobName)) {
+	$emailJobName = Get-IniParameter "emailJobName" "${FQDN}"
+}
+
+if ([string]::IsNullOrEmpty($exclude)) {
+	$excludelist = Get-IniParameter "exclude" "${FQDN}"
+	if (-not [string]::IsNullOrEmpty($excludelist)) {
+		$exclude = $excludelist.split(",")
+	}
+}
+
+if ([string]::IsNullOrEmpty($LogFile)) {
+	$LogFile = Get-IniParameter "LogFile" "${FQDN}"
+}
+
+if (-not $StepTiming.IsPresent) {
+	$IniFileString = Get-IniParameter "StepTiming" "${FQDN}"
+	$StepTiming = Is-TrueString "${IniFileString}"
+}
 
 if ([string]::IsNullOrEmpty($emailSubject)) {
 	if (-not ([string]::IsNullOrEmpty($emailJobName))) {
 		$emailJobName += " "
 	}
-	$emailSubject = "Backup of: {0} ${emailJobName}by: {1}" -f $(Get-WmiObject Win32_Computersystem).name, [Environment]::UserName
+	$emailSubject = "Backup of: ${FQDN} ${emailJobName}by: ${userName}"
 }
 
 $dateTime = get-date -f "yyyy-MM-dd HH-mm-ss"
@@ -161,7 +507,13 @@ $script_path = Split-Path -parent $MyInvocation.MyCommand.Definition
 if ([string]::IsNullOrEmpty($LogFile)) {
 	# No log file specified from command line - put one in the backup destination with date-time stamp.
 	$logFileDestination = $backupDestination
-	$LogFile = "$logFileDestination\$dateTime.log"
+	if ($logFileDestination) {
+		$LogFile = "$logFileDestination\$dateTime.log"
+	} else {
+		# This can happen if both the logfile and backup destination parameters were not in the INI file and not on the command line.
+		# In this case no log file is made. But we do proceed so there will be an email body and the receiver can find out what is wrong.
+		$LogFile = ""
+	}
 	$deleteOldLogFiles = $True
 } else {
 	if (Test-Path -Path $LogFile -pathType container) {
@@ -189,86 +541,111 @@ catch
 	$deleteOldLogFiles = $False
 }
 
-$backupDestinationArray = $backupDestination.split("\")
-
-if (($backupDestinationArray[0] -eq "") -and ($backupDestinationArray[1] -eq "")) {
-	# The destination is a UNC path (file share)
-	$backupDestinationTop = "\\" + $backupDestinationArray[2] + "\" + $backupDestinationArray[3] + "\"
-	$backupMappedPath = $backupDestinationTop
-	$backupHostName = $backupDestinationArray[2]
-} else {
-	if (-not ($backupDestination -match ":")) {
-		# No drive letter specified. This could be an attempt at a relative path, so first resolve it to the full path.
-		# This allows us to use split-path -Qualifier below to get the actual drive letter
-		$backupDestination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($backupDestination)
+if ([string]::IsNullOrEmpty($backupSources)) {
+	# No backup sources on command line, in host-specific or common section of ini file
+	# backup sources are mandatory, so flag the problem.
+	$output = "`nERROR: No backup source(s) specified`n"
+	echo $output
+	$emailBody = "$emailBody`r`n$output`r`n"
+	if ($LogFile) {
+		$output | Out-File "$LogFile"  -encoding ASCII -append
 	}
-	$backupDestinationDrive = split-path $backupDestination -Qualifier
-	$backupDestinationTop = $backupDestinationDrive + "\"
-	# See if the disk letter is mapped to a file share somewhere.
-	$backupDriveObject = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$backupDestinationDrive'"
-	$backupMappedPath = $backupDriveObject.ProviderName
-	if ($backupMappedPath) {
-		$backupPathArray = $backupMappedPath.split("\")
-		if (($backupPathArray[0] -eq "") -and ($backupPathArray[1] -eq "")) {
-			# The underlying destination is a UNC path (file share)
-			$backupHostName = $backupPathArray[2]
-		}
-	} else {
-		# Maybe the user did a "subst" command. Check for that.
-		$subst = (Subst) | findstr "$backupDestinationDrive\\"
-		# Looks like R:\: => UNC\hostname.myoffice.company.org\sharename
-		$parts = $subst -Split "UNC\\"
-		if ($parts) {
-			$host_FQDN = $parts[1].split("\")[0]
-			if ($host_FQDN) {
-				$backupHostName = $host_FQDN
-				$backupMappedPath = "\\" + $parts[1]
-			}
-		}
-	}
+	$parameters_ok = $False
 }
 
-if (($localSubnetOnly -eq $True) -and ($backupHostName)) {
-	# Check that the name is in the same subnet as us.
-	# Note: This also works if the user gives a real IPv4 like "\\10.20.30.40\backupshare"
-	# $backupHostName would be 10.20.30.40 in that case.
-	# TODO: Handle IPv6 addresses also some day.
-	$doBackup = $false
-	try {
-		$destinationIpAddresses = [System.Net.Dns]::GetHostAddresses($backupHostName)
-		[IPAddress]$destinationIp = $destinationIpAddresses[0]
+if ([string]::IsNullOrEmpty($backupDestination)) {
+	# No backup destination on command line or in INI file
+	# backup destination is mandatory, so flag the problem.
+	$output = "`nERROR: No backup destination specified`n"
+	echo $output
+	$emailBody = "$emailBody`r`n$output`r`n"
+	if ($LogFile) {
+		$output | Out-File "$LogFile"  -encoding ASCII -append
+	}
+	$parameters_ok = $False
+} else {
+	# Process the backup destination to find out where it might be
+	$backupDestinationArray = $backupDestination.split("\")
 
-		$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
-
-		foreach ($adapter in $localAdapters) {
-			# Belts and braces here - we have seen some systems that returned unusual adapters that had IPaddress 0.0.0.0 and no IPsubnet
-			# We want to ignore that sort of rubbish - the mask comparisons do not work.
-			if ($adapter.IPAddress[0]) {
-				[IPAddress]$IPv4Address = $adapter.IPAddress[0]
-				if ($adapter.IPSubnet[0]) {
-					if ($localSubnetMask -eq 0) {
-						[IPAddress]$mask = $adapter.IPSubnet[0]
-					} else {
-						[IPAddress]$mask = $localSubnetMask
-					}
-
-					if (($IPv4address.address -band $mask.address) -eq ($destinationIp.address -band $mask.address)) {
-						$doBackup = $true
-					}
+	if (($backupDestinationArray[0] -eq "") -and ($backupDestinationArray[1] -eq "")) {
+		# The destination is a UNC path (file share)
+		$backupDestinationTop = "\\" + $backupDestinationArray[2] + "\" + $backupDestinationArray[3] + "\"
+		$backupMappedPath = $backupDestinationTop
+		$backupHostName = $backupDestinationArray[2]
+	} else {
+		if (-not ($backupDestination -match ":")) {
+			# No drive letter specified. This could be an attempt at a relative path, so first resolve it to the full path.
+			# This allows us to use split-path -Qualifier below to get the actual drive letter
+			$backupDestination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($backupDestination)
+		}
+		$backupDestinationDrive = split-path $backupDestination -Qualifier
+		$backupDestinationTop = $backupDestinationDrive + "\"
+		# See if the disk letter is mapped to a file share somewhere.
+		$backupDriveObject = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$backupDestinationDrive'"
+		$backupMappedPath = $backupDriveObject.ProviderName
+		if ($backupMappedPath) {
+			$backupPathArray = $backupMappedPath.split("\")
+			if (($backupPathArray[0] -eq "") -and ($backupPathArray[1] -eq "")) {
+				# The underlying destination is a UNC path (file share)
+				$backupHostName = $backupPathArray[2]
+			}
+		} else {
+			# Maybe the user did a "subst" command. Check for that.
+			$subst = (Subst) | findstr "$backupDestinationDrive\\"
+			# Looks like R:\: => UNC\hostname.myoffice.company.org\sharename
+			$parts = $subst -Split "UNC\\"
+			if ($parts) {
+				$host_FQDN = $parts[1].split("\")[0]
+				if ($host_FQDN) {
+					$backupHostName = $host_FQDN
+					$backupMappedPath = "\\" + $parts[1]
 				}
 			}
 		}
 	}
-	catch {
-		$output = "ERROR: Could not get IP address for destination $backupDestination mapped to $backupMappedPath"
-		$emailBody = "$emailBody`r`n$output`r`n$_"
-		$error_during_backup = $true
-		echo $output  $_
+
+	if (($localSubnetOnly -eq $True) -and ($backupHostName)) {
+		# Check that the name is in the same subnet as us.
+		# Note: This also works if the user gives a real IPv4 like "\\10.20.30.40\backupshare"
+		# $backupHostName would be 10.20.30.40 in that case.
+		# TODO: Handle IPv6 addresses also some day.
+		$doBackup = $false
+		try {
+			$destinationIpAddresses = [System.Net.Dns]::GetHostAddresses($backupHostName)
+			[IPAddress]$destinationIp = $destinationIpAddresses[0]
+
+			$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
+
+			foreach ($adapter in $localAdapters) {
+				# Belts and braces here - we have seen some systems that returned unusual adapters that had IPaddress 0.0.0.0 and no IPsubnet
+				# We want to ignore that sort of rubbish - the mask comparisons do not work.
+				if ($adapter.IPAddress[0]) {
+					[IPAddress]$IPv4Address = $adapter.IPAddress[0]
+					if ($adapter.IPSubnet[0]) {
+						if ($localSubnetMask -eq 0) {
+							[IPAddress]$mask = $adapter.IPSubnet[0]
+						} else {
+							[IPAddress]$mask = $localSubnetMask
+						}
+
+						if (($IPv4address.address -band $mask.address) -eq ($destinationIp.address -band $mask.address)) {
+							$doBackup = $true
+						}
+					}
+				}
+			}
+		}
+		catch {
+			$output = "ERROR: Could not get IP address for destination $backupDestination mapped to $backupMappedPath"
+			$emailBody = "$emailBody`r`n$output`r`n$_"
+			$error_during_backup = $true
+			echo $output  $_
+		}
 	}
 }
 
 # Just test for the existence of the top of the backup destination. "ln" will create any folders as needed, as long as the top exists.
-if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
+if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 	foreach($backup_source in $backupSources)
 	{
 		if (test-path $backup_source) {
@@ -560,7 +937,7 @@ if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 		}
 	}
 
-	if ($deleteOldLogFiles -eq $True) {
+	if (($deleteOldLogFiles -eq $True) -and ($logFileDestination)) {
 		$lastLogFiles = @()
 		If (Test-Path $logFileDestination -pathType container) {
 			$oldLogItems = Get-ChildItem -Force -Path $logFileDestination | Where-Object {$_ -is [IO.FileInfo]} | Sort-Object -Property Name
@@ -662,12 +1039,19 @@ if (($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 		$backupMappedString = ""
 	}
 
-	if ($doBackup -eq $True) {
-		# The destination drive or \\server\share does not exist.
-		$output = "ERROR: Destination drive or share $backupDestinationTop$backupMappedString does not exist - backup NOT done`r`n"
+	if ($parameters_ok -eq $True) {
+		if ($doBackup -eq $True) {
+			# The destination drive or \\server\share does not exist.
+			$output = "ERROR: Destination drive or share $backupDestinationTop$backupMappedString does not exist - backup NOT done`r`n"
+		} else {
+			# The backup was not done because localSubnetOnly was on, and the destination \\server\share is not in the local subnet.
+			$output = "ERROR: Destination share $backupDestinationTop$backupMappedString is not in a local subnet - backup NOT done`r`n"
+		}
 	} else {
-		# The backup was not done because localSubnetOnly was on, and the destination \\server\share is not in the local subnet.
-		$output = "ERROR: Destination share $backupDestinationTop$backupMappedString is not in a local subnet - backup NOT done`r`n"
+		# There was some error in the supplied parameters.
+		# The specific problem will have been mentioned in the email body/log file earlier.
+		# Put a general message here.
+		$output = "ERROR: There was a problem with the input parameters"
 	}
 	$emailBody = "$emailBody`r`n$output`r`n"
 	$error_during_backup = $true
