@@ -82,11 +82,7 @@
     Backup with more than one source.
 .NOTES
     Author: Artur Neumann, Phil Davis *INFN*
-<<<<<<< HEAD
-    Version: 2.0_dev
-=======
-	Version: 2.0
->>>>>>> phil-davis-patch-1
+	Version: 2.0.ALPHA.1
 #>
 
 [CmdletBinding()]
@@ -145,9 +141,6 @@ Param(
 	[switch]$StepTiming=$False
 )
 
-<<<<<<< HEAD
-echo $
-=======
 Function Get-IniContent 
 { 
     <# 
@@ -334,7 +327,6 @@ Function Is-TrueString
     End
 	{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function ended"}
 }
->>>>>>> phil-davis-patch-1
 
 $emailBody = ""
 $error_during_backup = $false
@@ -1151,7 +1143,6 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 		if (!$emailSendSucess) {
 			Start-sleep -milliseconds $msToPauseBetweenEmailSendRetries
 		}
-		
 	}
 
 	if ($LogFile) {
@@ -1159,31 +1150,4 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	}
 
 	echo "done"
-}
-
-
-# stolen from Gerry Bammert @ http://powershell.com/cs/media/p/2559.aspx
-# Each line of the .ini File will be processed through the pipe.
-# The splitted lines fill a hastable. Empty lines and lines beginning with
-# '[' or ';' are ignored. $ht returns the results as a hashtable.
-function Get-Settings()
-{
-	BEGIN
-	{
-		$ht = @{}
-	}
-	PROCESS
-	{
-		$key = [regex]::split($_,'=')
-		if(($key[0].CompareTo("") -ne 0) `
-		-and ($key[0].StartsWith("[") -ne $True) `
-		-and ($key[0].StartsWith(";") -ne $True))
-		{
-			$ht.Add($key[0], $key[1])
-		}
-	}
-	END
-	{
-		return $ht
-	}
 }
