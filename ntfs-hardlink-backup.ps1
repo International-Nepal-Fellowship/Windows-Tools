@@ -858,7 +858,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				foreach( $line in $backup_response.length..1 ) {
 					$summary =  $backup_response[$line] + "`n" + $summary
 					
-					if ($backup_response[$line] -match '(.*):\s+[\d+\-]\s+[\d+\-]\s+[\d+\-]\s+[\d+\-]\s+[\d+\-]\s+([1-9]+).*') {
+					if ($backup_response[$line] -match '(.*):\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s*([1-9]+\d*(?:\,\d*)?)') {
 						$error_during_backup = $true
 					}
 					if ($backup_response[$line] -match '.*Total\s+Copied\s+Linked\s+Skipped.*\s+Excluded\s+Failed.*') {
