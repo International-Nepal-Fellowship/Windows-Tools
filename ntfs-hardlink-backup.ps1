@@ -23,7 +23,7 @@
 .PARAMETER backupsToKeep
     How many backup copies should be kept. All older backups and their log files will be deleted. 1 means mirror. Default=50
 .PARAMETER timeTolerance
-    Sometimes useful to not have an exact timestamp comparison bewteen source and dest, but kind of a fuzzy comparison, because the system time of NAS drives is not exactly synced with the host.
+    Sometimes useful to not have an exact timestamp comparison between source and dest, but kind of a fuzzy comparison, because the system time of NAS drives is not exactly synced with the host.
 	To overcome this we use the -timeTolerance switch to specify a value in milliseconds.
 .PARAMETER exclude
 	Exclude files via wildcards. Can be a list separated by comma.
