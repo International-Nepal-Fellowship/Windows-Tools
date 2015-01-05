@@ -648,6 +648,13 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 	foreach($backup_source in $backupSources)
 	{
+		#We don't want to have "\" at the end because we will quote the path later and ln.exe would 
+		#treat this as escaping of the quote (\") and can not parse the command line.
+		#ln --copy "x:\" y:\dir\newdir 
+		#see also https://github.com/individual-it/ntfs-hardlink-backup/issues/16
+		if ($backup_source.substring($backup_source.length-1,1) -eq "\") {
+			$backup_source=$backup_source.Substring(0,$backup_source.Length-1)
+		}
 		if (test-path $backup_source) {
 			$stepCounter = 1
 			$backupSourceArray = $backup_source.split("\")
@@ -664,6 +671,12 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$backup_source_path =  split-path $backup_source -noQualifier
 			}
 			$backup_source_folder =  split-path $backup_source -leaf
+			
+			#check if we try to backup a complete drive
+			if ($backup_source_folder -match "([A-Z]):\\") {
+				$backup_source_folder = "["+$matches[1]+"]"
+			}		
+			
 			$actualBackupDestination = "$backupDestination\$backup_source_folder"
 
 			#if the user wants to keep just one backup we do a mirror without any date, so we don't need
@@ -840,7 +853,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					"`r`nFull copy from $backup_source_path to $actualBackupDestination" | Out-File "$LogFile"  -encoding ASCII -append
 				}
 
-				#echo "$script_path\..\ln.exe $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    >> $LogFile"
+				#echo "$script_path\..\ln.exe $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
 				`cmd /c  "$script_path\..\ln.exe $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
 			} else {
 				echo "Delorian copy from $backup_source_path to $actualBackupDestination against $backupDestination\$lastBackupFolderName"
@@ -848,7 +861,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					"`r`nDelorian copy from $backup_source_path to $actualBackupDestination against $backupDestination\$lastBackupFolderName" | Out-File "$LogFile"  -encoding ASCII -append
 				}
 
-				#echo "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`"  >> $LogFile"
+				#echo "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"
 				`cmd /c  "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"`
 			}
 
