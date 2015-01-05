@@ -799,9 +799,17 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			If (Test-Path $backupDestination -pathType container) {
 				$oldBackupItems = Get-ChildItem -Force -Path $backupDestination | Where-Object {$_ -is [IO.DirectoryInfo]} | Sort-Object -Property Name
 
+				#escape $backup_source_folder if we are using a drive letter
+				if ($backup_source_folder -match "\[[A-Z]\]") {
+					$escaped_backup_source_folder = '\' + $backup_source_folder + '\'
+				}
+				else {
+					$escaped_backup_source_folder = $backup_source_folder
+				}
+				
 				# get me the last backup if any
 				foreach ($item in $oldBackupItems) {
-					if ($item.Name  -match '^'+$backup_source_folder+' - \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' ) {
+					if ($item.Name  -match '^'+$escaped_backup_source_folder+' - \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' ) {
 						$lastBackupFolderName = $item.Name
 						$lastBackupFolders += $item
 					}
