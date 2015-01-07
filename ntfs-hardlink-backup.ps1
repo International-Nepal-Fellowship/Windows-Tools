@@ -22,6 +22,8 @@
     Path where the data should go to.
 .PARAMETER backupsToKeep
     How many backup copies should be kept. All older backups and their log files will be deleted. 1 means mirror. Default=50
+.PARAMETER backupsToKeepPerYear
+    How many backup copies of every year should be kept. This will add to the number of backupsToKeep. Default=0
 .PARAMETER timeTolerance
     Sometimes useful to not have an exact timestamp comparison between source and dest, but kind of a fuzzy comparison, because the system time of NAS drives is not exactly synced with the host.
 	To overcome this we use the -timeTolerance switch to specify a value in milliseconds.
@@ -88,7 +90,7 @@
     Backup with more than one source.
 .NOTES
     Author: Artur Neumann, Phil Davis *INFN*
-	Version: 2.0.ALPHA.3
+	Version: 2.0.ALPHA.4
 #>
 
 [CmdletBinding()]
@@ -102,6 +104,8 @@ Param(
 	[Parameter(Mandatory=$False)]
 	[Int32]$backupsToKeep,
 	[Parameter(Mandatory=$False)]
+	[Int32]$backupsToKeepPerYear,
+	[Parameter(Mandatory=$False)]	
 	[string]$emailTo="",
 	[Parameter(Mandatory=$False)]
 	[string]$emailFrom="",
@@ -385,6 +389,13 @@ if ($backupsToKeep -eq 0) {
 	$backupsToKeep = Get-IniParameter "backupstokeep" "${FQDN}"
 	if ($backupsToKeep -eq 0) {
 		$backupsToKeep = 50;
+	}
+}
+
+if ($backupsToKeepPerYear -eq 0) {
+	$backupsToKeepPerYear = Get-IniParameter "backupsToKeepPerYear" "${FQDN}"
+	if ($backupsToKeepPerYear -eq 0) {
+		$backupsToKeepPerYear = 0;
 	}
 }
 
@@ -816,6 +827,8 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 
 			$lastBackupFolderName = ""
 			$lastBackupFolders = @()
+			$lastBackupFoldersPerYear = @{}
+			$lastBackupFoldersPerYearToKeep = @{}
 			If (Test-Path $backupDestination -pathType container) {
 				$oldBackupItems = Get-ChildItem -Force -Path $backupDestination | Where-Object {$_ -is [IO.DirectoryInfo]} | Sort-Object -Property Name
 
@@ -826,16 +839,62 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				else {
 					$escaped_backup_source_folder = $backup_source_folder
 				}
+
+				#descide which backups from the last year to keep
+				if ($backupsToKeepPerYear -gt 0) {
+					foreach ($item in $oldBackupItems) {
+						if ($item.Name  -match '^'+$escaped_backup_source_folder+' - (\d{4})-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' ) {
+							if (!($lastBackupFoldersPerYear.ContainsKey($matches[1]))) {
+								
+								
+								$lastBackupFoldersPerYear[$matches[1]] = @()
+							}
+							$lastBackupFoldersPerYear[$matches[1]]+= $item
+						}
+					}
+				
+					
+					foreach ($year in $($lastBackupFoldersPerYear.keys)) {
+						#echo $year
+						if (!($lastBackupFoldersPerYearToKeep.ContainsKey($year))) {
+							$lastBackupFoldersPerYearToKeep[$year] = @()
+						}
+						if ($backupsToKeepPerYear -ge $lastBackupFoldersPerYear[$year].length) {
+							$lastBackupFoldersPerYearToKeep[$year] = $lastBackupFoldersPerYear[$year]
+						} else {
+							$lastBackupFoldersPerYearToKeep[$year] += $lastBackupFoldersPerYear[$year][0]
+							
+							if ($backupsToKeepPerYear -gt 1 -and $lastBackupFoldersPerYear[$year].length -gt 1) {							
+								$lastBackupFoldersPerYearToKeep[$year] += $lastBackupFoldersPerYear[$year][$lastBackupFoldersPerYear[$year].length-1]
+							} 
+							if ($backupsToKeepPerYear -gt 2 )						{
+								$stepBetweenBackupsToKeep = ($lastBackupFoldersPerYear[$year].length-1)/($backupsToKeepPerYear)
+								$backupNoToKeep = 1
+								while ($lastBackupFoldersPerYearToKeep[$year].length -lt $backupsToKeepPerYear -and $lastBackupFoldersPerYearToKeep[$year].length -lt $lastBackupFoldersPerYear[$year].length) {
+									$backupNoToKeep = [Math]::round($backupNoToKeep+$stepBetweenBackupsToKeep)			
+									$lastBackupFoldersPerYearToKeep[$year] += $lastBackupFoldersPerYear[$year][$backupNoToKeep]
+								}
+							}
+						}
+					}
+				
+				}
 				
 				# get me the last backup if any
 				foreach ($item in $oldBackupItems) {
-					if ($item.Name  -match '^'+$escaped_backup_source_folder+' - \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' ) {
+					if ($item.Name  -match '^'+$escaped_backup_source_folder+' - (\d{4})-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' ) {
 						$lastBackupFolderName = $item.Name
-						$lastBackupFolders += $item
+						
+						#if we have that folder in the list of folders to keep do not add it to the list
+						#of lastBackupFolders because they will be used for deleting old folders
+						 if ($lastBackupFoldersPerYearToKeep[$matches[1]] -notcontains $item) {
+							$lastBackupFolders += $item
+						 }
 					}
 				}
+				
 			}
-
+			
 			if ($traditional -eq $True) {
 				$traditionalArgument = " --traditional "
 			} else {
