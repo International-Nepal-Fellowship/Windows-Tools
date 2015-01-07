@@ -36,6 +36,12 @@
 .PARAMETER noea
 	The -noea option tells ln.exe not to copy EA Records of files and directories.
 	This option can be useful if the destination supports NTFS, but can not deal with EA Records, which happens on certain NAS drives.
+.PARAMETER splice
+	Splice reconnects Outer Junctions/Symlink directories in the destination to their original targets.
+	see http://schinagl.priv.at/nt/ln/ln.html#splice
+.PARAMETER backupModeACLs
+	Using the Backup Mode ACLs aka Access Control Lists, which contain the security for Files, Folders, Junctions or SymbolicLinks, and Encrypted Files are also copied.
+	see http://schinagl.priv.at/nt/ln/ln.html#backup
 .PARAMETER localSubnetOnly
     Switch on to only run the backup when the destination is a local disk or a server in the same subnet.
 	This is useful for scheduled network backups that should only run when the laptop is on the home office network.
@@ -82,7 +88,7 @@
     Backup with more than one source.
 .NOTES
     Author: Artur Neumann, Phil Davis *INFN*
-	Version: 2.0.ALPHA.2
+	Version: 2.0.ALPHA.3
 #>
 
 [CmdletBinding()]
@@ -126,6 +132,10 @@ Param(
 	[Parameter(Mandatory=$False)]
 	[switch]$noea,
 	[Parameter(Mandatory=$False)]
+	[switch]$splice,
+	[Parameter(Mandatory=$False)]
+	[switch]$backupModeACLs,
+	[Parameter(Mandatory=$False)]	
 	[switch]$localSubnetOnly,
 	[Parameter(Mandatory=$False)]
 	[Int32]$localSubnetMask,
@@ -457,6 +467,16 @@ if (-not $noads.IsPresent) {
 if (-not $noea.IsPresent) {
 	$IniFileString = Get-IniParameter "noea" "${FQDN}"
 	$noea = Is-TrueString "${IniFileString}"
+}
+
+if (-not $splice.IsPresent) {
+	$IniFileString = Get-IniParameter "splice" "${FQDN}"
+	$splice = Is-TrueString "${IniFileString}"
+}
+
+if (-not $backupModeACLs.IsPresent) {
+	$IniFileString = Get-IniParameter "backupModeACLs" "${FQDN}"
+	$backupModeACLs = Is-TrueString "${IniFileString}"
 }
 
 if (-not $localSubnetOnly.IsPresent) {
@@ -834,6 +854,18 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$noeaArgument = ""
 			}
 
+			if ($splice -eq $True) {
+				$spliceArgument = " --splice "
+			} else {
+				$spliceArgument = ""
+			}			
+			
+			if ($backupModeACLs -eq $True) {
+				$backupModeACLsArgument = " --backup "
+			} else {
+				$backupModeACLsArgument = ""
+			}				
+			
 			if ($timeTolerance -ne 0) {
 				$timeToleranceArgument = " --timetolerance $timeTolerance "
 			} else {
@@ -847,7 +879,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				}
 			}
 
-			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeString"
+			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeString $spliceArgument $backupModeACLsArgument"
 
 			if ($LogFile) {
 				$logFileCommandAppend = " >> `"$LogFile`""
