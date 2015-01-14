@@ -90,7 +90,7 @@
     Backup with more than one source.
 .NOTES
     Author: Artur Neumann, Phil Davis *INFN*
-	Version: 2.0.ALPHA.4
+	Version: 2.0.ALPHA.5
 #>
 
 [CmdletBinding()]
@@ -835,46 +835,59 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				#escape $backup_source_folder if we are using a drive letter
 				if ($backup_source_folder -match "\[[A-Z]\]") {
 					$escaped_backup_source_folder = '\' + $backup_source_folder
+					echo $escaped_backup_source_folder
+					exit
 				}
 				else {
 					$escaped_backup_source_folder = $backup_source_folder
 				}
 
-				#descide which backups from the last year to keep
+				
 				if ($backupsToKeepPerYear -gt 0) {
+				
+					#find all backups per year
 					foreach ($item in $oldBackupItems) {
 						if ($item.Name  -match '^'+$escaped_backup_source_folder+' - (\d{4})-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' ) {
-							if (!($lastBackupFoldersPerYear.ContainsKey($matches[1]))) {
-								
-								
+							if (!($lastBackupFoldersPerYear.ContainsKey($matches[1]))) {	
 								$lastBackupFoldersPerYear[$matches[1]] = @()
 							}
 							$lastBackupFoldersPerYear[$matches[1]]+= $item
 						}
 					}
 				
-					
+					#decide which backups from the last year to keep
 					foreach ($year in $($lastBackupFoldersPerYear.keys)) {
 						#echo $year
 						if (!($lastBackupFoldersPerYearToKeep.ContainsKey($year))) {
 							$lastBackupFoldersPerYearToKeep[$year] = @()
 						}
+						
+						# If we want to keep more backups than are actually there then just keep the whole array
 						if ($backupsToKeepPerYear -ge $lastBackupFoldersPerYear[$year].length) {
 							$lastBackupFoldersPerYearToKeep[$year] = $lastBackupFoldersPerYear[$year]
 						} else {
-							$lastBackupFoldersPerYearToKeep[$year] += $lastBackupFoldersPerYear[$year][0]
+							#calculate the day we ideally would like to have a backup of
+							#then find the backup we have that is nearest to that date and keep it
 							
-							if ($backupsToKeepPerYear -gt 1 -and $lastBackupFoldersPerYear[$year].length -gt 1) {							
-								$lastBackupFoldersPerYearToKeep[$year] += $lastBackupFoldersPerYear[$year][$lastBackupFoldersPerYear[$year].length-1]
-							} 
-							if ($backupsToKeepPerYear -gt 2 )						{
-								$stepBetweenBackupsToKeep = ($lastBackupFoldersPerYear[$year].length-1)/($backupsToKeepPerYear)
-								$backupNoToKeep = 1
-								while ($lastBackupFoldersPerYearToKeep[$year].length -lt $backupsToKeepPerYear -and $lastBackupFoldersPerYearToKeep[$year].length -lt $lastBackupFoldersPerYear[$year].length) {
-									$backupNoToKeep = [Math]::round($backupNoToKeep+$stepBetweenBackupsToKeep)			
-									$lastBackupFoldersPerYearToKeep[$year] += $lastBackupFoldersPerYear[$year][$backupNoToKeep]
+							$daysBetweenBackupsToKeep = 365/$backupsToKeepPerYear
+							$dayOfYearToKeepBackupOf = 0
+							while (($lastBackupFoldersPerYearToKeep[$year].length -lt $backupsToKeepPerYear) -and ($lastBackupFoldersPerYear[$year].length -gt 0)) {
+								$dayOfYearToKeepBackupOf = $dayOfYearToKeepBackupOf + $daysBetweenBackupsToKeep
+								$previousDaysDifference = 366
+								foreach ($backupItem in $lastBackupFoldersPerYear[$year]) {
+									
+									$backupItem.Name  -match '^'+$escaped_backup_source_folder+' - (\d{4}-\d{2}-\d{2}) \d{2}-\d{2}-\d{2}$' | Out-Null
+									$daysDifference = [math]::abs($dayOfYearToKeepBackupOf-(Get-Date $matches[1]).DayOfYear)
+
+									if ($daysDifference -lt $previousDaysDifference) {
+										$bestBackupToKeep=$backupItem
+									}
+									$previousDaysDifference = $daysDifference
 								}
-							}
+								
+								$lastBackupFoldersPerYearToKeep[$year] +=$bestBackupToKeep
+								$lastBackupFoldersPerYear[$year] = $lastBackupFoldersPerYear[$year] -ne $bestBackupToKeep
+							}	
 						}
 					}
 				
