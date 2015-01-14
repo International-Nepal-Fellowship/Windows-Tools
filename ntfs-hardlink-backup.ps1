@@ -834,7 +834,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 
 				#escape $backup_source_folder if we are using a drive letter
 				if ($backup_source_folder -match "\[[A-Z]\]") {
-					$escaped_backup_source_folder = '\' + $backup_source_folder + '\'
+					$escaped_backup_source_folder = '\' + $backup_source_folder
 				}
 				else {
 					$escaped_backup_source_folder = $backup_source_folder
