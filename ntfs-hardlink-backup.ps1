@@ -20,6 +20,10 @@
     Source path of the backup. Can be a list separated by comma.
 .PARAMETER backupDestination
     Path where the data should go to.
+.PARAMETER subst
+	Drive letter to substitute (subst) for the path specified in backupDestination.
+	Often useful if a NAS or other device is a problem when accessed directly by UNC path.
+	Sometimes if a drive letter is substituted for the UNC path then things work.
 .PARAMETER backupsToKeep
     How many backup copies should be kept. All older backups and their log files will be deleted. 1 means mirror. Default=50
 .PARAMETER backupsToKeepPerYear
@@ -101,6 +105,8 @@ Param(
 	[String[]]$backupSources,
 	[Parameter(Mandatory=$False)]
 	[String]$backupDestination,
+	[Parameter(Mandatory=$False)]
+	[String]$subst,
 	[Parameter(Mandatory=$False)]
 	[Int32]$backupsToKeep,
 	[Parameter(Mandatory=$False)]
@@ -385,6 +391,10 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 	$backupDestination = Get-IniParameter "backupdestination" "${FQDN}"
 }
 
+if ([string]::IsNullOrEmpty($subst)) {
+	$subst = Get-IniParameter "subst" "${FQDN}"
+}
+
 if ($backupsToKeep -eq 0) {
 	$backupsToKeep = Get-IniParameter "backupstokeep" "${FQDN}"
 	if ($backupsToKeep -eq 0) {
@@ -595,6 +605,25 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 	}
 	$parameters_ok = $False
 } else {
+	# If the user wants to substitute a drive letter for the backup destination, do that now.
+	# Then following code can process the resulting "subst" in the same way as if the user had done it externally.
+	if (-not ([string]::IsNullOrEmpty($subst))) {
+		if ($subst -match "^[A-Z]:?$") {
+			$substDrive = $subst.Substring(0,1) + ":"
+			subst "$substDrive" $backupDestination
+			$backupDestination = $substDrive
+		} else {
+			$output = "`nERROR: subst parameter $subst is invalid`n"
+			echo $output
+			$emailBody = "$emailBody`r`n$output`r`n"
+			if ($LogFile) {
+				$output | Out-File "$LogFile"  -encoding ASCII -append
+			}
+			# Flag that there is a problem, but let following code process and report any other problems before bailing out.
+			$parameters_ok = $False
+		}
+	}
+	
 	# Process the backup destination to find out where it might be
 	$backupDestinationArray = $backupDestination.split("\")
 
@@ -622,9 +651,9 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 			}
 		} else {
 			# Maybe the user did a "subst" command. Check for that.
-			$subst = (Subst) | findstr "$backupDestinationDrive\\"
+			$substText = (Subst) | findstr "$backupDestinationDrive\\"
 			# Looks like R:\: => UNC\hostname.myoffice.company.org\sharename
-			$parts = $subst -Split "UNC\\"
+			$parts = $substText -Split "UNC\\"
 			if ($parts) {
 				$host_FQDN = $parts[1].split("\")[0]
 				if ($host_FQDN) {
@@ -633,6 +662,12 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 				}
 			}
 		}
+	}
+
+	if ($backupMappedPath) {
+		$backupMappedString = " (" + $backupMappedPath + ")"
+	} else {
+		$backupMappedString = ""
 	}
 
 	if (($localSubnetOnly -eq $True) -and ($backupHostName)) {
@@ -823,7 +858,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			echo "$stepCounter. $stepTime Running backup"
 			$stepCounter++
 			echo "Source: $backup_source_path"
-			echo "Destination: $actualBackupDestination"
+			echo "Destination: $actualBackupDestination$backupMappedString"
 
 			$lastBackupFolderName = ""
 			$lastBackupFolders = @()
@@ -960,17 +995,17 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			$start_time = get-date -f "yyyy-MM-dd HH-mm-ss"
 
 			if ($lastBackupFolderName -eq "" ) {
-				echo "Full copy from $backup_source_path to $actualBackupDestination"
+				echo "Full copy from $backup_source_path to $actualBackupDestination$backupMappedString"
 				if ($LogFile) {
-					"`r`nFull copy from $backup_source_path to $actualBackupDestination" | Out-File "$LogFile"  -encoding ASCII -append
+					"`r`nFull copy from $backup_source_path to $actualBackupDestination$backupMappedString" | Out-File "$LogFile"  -encoding ASCII -append
 				}
 
 				#echo "$script_path\..\ln.exe $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
 				`cmd /c  "$script_path\..\ln.exe $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
 			} else {
-				echo "Delorian copy from $backup_source_path to $actualBackupDestination against $backupDestination\$lastBackupFolderName"
+				echo "Delorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $backupDestination\$lastBackupFolderName"
 				if ($LogFile) {
-					"`r`nDelorian copy from $backup_source_path to $actualBackupDestination against $backupDestination\$lastBackupFolderName" | Out-File "$LogFile"  -encoding ASCII -append
+					"`r`nDelorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $backupDestination\$lastBackupFolderName" | Out-File "$LogFile"  -encoding ASCII -append
 				}
 
 				#echo "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"
@@ -994,7 +1029,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 
 			echo "done`n"
 
-			$summary = "`n------Summary-----`nBackup AT: $start_time FROM: $backup_source TO: $backupDestination $backupMappedPath`n" + $summary
+			$summary = "`n------Summary-----`nBackup AT: $start_time FROM: $backup_source TO: $backupDestination$backupMappedString`n" + $summary
 			echo $summary
 
 			$emailBody = $emailBody + $summary
@@ -1161,12 +1196,6 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 	}
 
 } else {
-	if ($backupMappedPath) {
-		$backupMappedString = " (" + $backupMappedPath + ")"
-	} else {
-		$backupMappedString = ""
-	}
-
 	if ($parameters_ok -eq $True) {
 		if ($doBackup -eq $True) {
 			# The destination drive or \\server\share does not exist.
@@ -1187,6 +1216,11 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 	if ($LogFile) {
 		$output | Out-File "$LogFile" -encoding ASCII -append
 	}
+}
+
+if (-not ([string]::IsNullOrEmpty($substDrive))) {
+	# Delete any drive letter substitution done earlier
+	subst "$substDrive" /D
 }
 
 if ($emailTo -AND $emailFrom -AND $SMTPServer) {
