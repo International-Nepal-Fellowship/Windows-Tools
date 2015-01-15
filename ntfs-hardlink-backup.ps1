@@ -870,8 +870,6 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				#escape $backup_source_folder if we are doing backup of a full disk like D:\ to folder [D]
 				if ($backup_source_folder -match "\[[A-Z]\]") {
 					$escaped_backup_source_folder = '\' + $backup_source_folder
-					echo $escaped_backup_source_folder
-					exit
 				}
 				else {
 					$escaped_backup_source_folder = $backup_source_folder
