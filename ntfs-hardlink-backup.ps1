@@ -832,7 +832,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			If (Test-Path $backupDestination -pathType container) {
 				$oldBackupItems = Get-ChildItem -Force -Path $backupDestination | Where-Object {$_ -is [IO.DirectoryInfo]} | Sort-Object -Property Name
 
-				#escape $backup_source_folder if we are using a drive letter
+				#escape $backup_source_folder if we are doing backup of a full disk like D:\ to folder [D]
 				if ($backup_source_folder -match "\[[A-Z]\]") {
 					$escaped_backup_source_folder = '\' + $backup_source_folder
 					echo $escaped_backup_source_folder
