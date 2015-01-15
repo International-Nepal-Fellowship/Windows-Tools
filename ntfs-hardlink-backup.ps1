@@ -900,9 +900,9 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 						
 						#if we have that folder in the list of folders to keep do not add it to the list
 						#of lastBackupFolders because they will be used for deleting old folders
-						 if ($lastBackupFoldersPerYearToKeep[$matches[1]] -notcontains $item) {
+						if ($lastBackupFoldersPerYearToKeep[$matches[1]] -notcontains $item) {
 							$lastBackupFolders += $item
-						 }
+						}
 					}
 				}
 				
