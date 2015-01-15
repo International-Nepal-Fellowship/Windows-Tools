@@ -104,7 +104,7 @@ Param(
 	[Parameter(Mandatory=$False)]
 	[String[]]$backupSources,
 	[Parameter(Mandatory=$False)]
-	[String]$backupDestination,
+	[String[]]$backupDestination,
 	[Parameter(Mandatory=$False)]
 	[String]$subst,
 	[Parameter(Mandatory=$False)]
@@ -388,7 +388,13 @@ if ([string]::IsNullOrEmpty($backupSources)) {
 }
 
 if ([string]::IsNullOrEmpty($backupDestination)) {
-	$backupDestination = Get-IniParameter "backupdestination" "${FQDN}"
+	$backupDestinationList = Get-IniParameter "backupdestination" "${FQDN}"
+
+
+	if (-not [string]::IsNullOrEmpty($backupDestinationList)) {
+
+		$backupDestination = $backupDestinationList.split(",")
+	}	
 }
 
 if ([string]::IsNullOrEmpty($subst)) {
@@ -527,10 +533,6 @@ if ([string]::IsNullOrEmpty($exclude)) {
 	}
 }
 
-if ([string]::IsNullOrEmpty($LogFile)) {
-	$LogFile = Get-IniParameter "LogFile" "${FQDN}"
-}
-
 if (-not $StepTiming.IsPresent) {
 	$IniFileString = Get-IniParameter "StepTiming" "${FQDN}"
 	$StepTiming = Is-TrueString "${IniFileString}"
@@ -545,6 +547,139 @@ if ([string]::IsNullOrEmpty($emailSubject)) {
 
 $dateTime = get-date -f "yyyy-MM-dd HH-mm-ss"
 $script_path = Split-Path -parent $MyInvocation.MyCommand.Definition
+
+if ([string]::IsNullOrEmpty($backupDestination)) {
+	# No backup destination on command line or in INI file
+	# backup destination is mandatory, so flag the problem.
+	$output = "`nERROR: No backup destination specified`n"
+	echo $output
+	$emailBody = "$emailBody`r`n$output`r`n"
+	
+	$tempLogContent = $output
+	
+	$parameters_ok = $False
+} else {
+	foreach($possibleBackupDestination in $backupDestination) {
+
+		# If the user wants to substitute a drive letter for the backup destination, do that now.
+		# Then following code can process the resulting "subst" in the same way as if the user had done it externally.
+		if (-not ([string]::IsNullOrEmpty($subst))) {
+			if ($subst -match "^[A-Z]:?$") { #TODO add check if we try to subst a not UNC path
+				$substDrive = $subst.Substring(0,1) + ":"
+				subst "$substDrive" /d | Out-Null
+				subst "$substDrive" $possibleBackupDestination
+
+				$possibleBackupDestination = $substDrive
+			} else {
+				$output = "`nERROR: subst parameter $subst is invalid`n"
+				echo $output
+				$emailBody = "$emailBody`r`n$output`r`n"
+				
+				$tempLogContent += $output
+				
+				# Flag that there is a problem, but let following code process and report any other problems before bailing out.
+				$parameters_ok = $False
+			}
+		}
+		
+		# Process the backup destination to find out where it might be
+		$backupDestinationArray = $possibleBackupDestination.split("\")
+
+		if (($backupDestinationArray[0] -eq "") -and ($backupDestinationArray[1] -eq "")) {
+			# The destination is a UNC path (file share)
+			$backupDestinationTop = "\\" + $backupDestinationArray[2] + "\" + $backupDestinationArray[3] + "\"
+			$backupMappedPath = $backupDestinationTop
+			$backupHostName = $backupDestinationArray[2]
+		} else {
+			if (-not ($possibleBackupDestination -match ":")) {
+				# No drive letter specified. This could be an attempt at a relative path, so first resolve it to the full path.
+				# This allows us to use split-path -Qualifier below to get the actual drive letter
+				$possibleBackupDestination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($possibleBackupDestination)
+			}
+			$backupDestinationDrive = split-path $possibleBackupDestination -Qualifier
+			$backupDestinationDrive = $backupDestinationDrive.toupper()
+			$backupDestinationTop = $backupDestinationDrive + "\"
+			# See if the disk letter is mapped to a file share somewhere.
+			$backupDriveObject = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$backupDestinationDrive'"
+			$backupMappedPath = $backupDriveObject.ProviderName
+			if ($backupMappedPath) {
+				$backupPathArray = $backupMappedPath.split("\")
+				if (($backupPathArray[0] -eq "") -and ($backupPathArray[1] -eq "")) {
+					# The underlying destination is a UNC path (file share)
+					$backupHostName = $backupPathArray[2]
+				}
+			} else {
+				# Maybe the user did a "subst" command. Check for that.
+				$substText = (Subst) | findstr "$backupDestinationDrive\\"
+				# Looks like R:\: => UNC\hostname.myoffice.company.org\sharename
+				$parts = $substText -Split "UNC\\"
+				if ($parts) {
+					$host_FQDN = $parts[1].split("\")[0]
+					if ($host_FQDN) {
+						$backupHostName = $host_FQDN
+						$backupMappedPath = "\\" + $parts[1]
+					}
+				}
+			}
+		}
+
+		if ($backupMappedPath) {
+			$backupMappedString = " (" + $backupMappedPath + ")"
+		} else {
+			$backupMappedString = ""
+		}
+
+		if (($localSubnetOnly -eq $True) -and ($backupHostName)) {
+			# Check that the name is in the same subnet as us.
+			# Note: This also works if the user gives a real IPv4 like "\\10.20.30.40\backupshare"
+			# $backupHostName would be 10.20.30.40 in that case.
+			# TODO: Handle IPv6 addresses also some day.
+			$doBackup = $false
+			try {
+				$destinationIpAddresses = [System.Net.Dns]::GetHostAddresses($backupHostName)
+				[IPAddress]$destinationIp = $destinationIpAddresses[0]
+
+				$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
+
+				foreach ($adapter in $localAdapters) {
+					# Belts and braces here - we have seen some systems that returned unusual adapters that had IPaddress 0.0.0.0 and no IPsubnet
+					# We want to ignore that sort of rubbish - the mask comparisons do not work.
+					if ($adapter.IPAddress[0]) {
+						[IPAddress]$IPv4Address = $adapter.IPAddress[0]
+						if ($adapter.IPSubnet[0]) {
+							if ($localSubnetMask -eq 0) {
+								[IPAddress]$mask = $adapter.IPSubnet[0]
+							} else {
+								[IPAddress]$mask = $localSubnetMask
+							}
+
+							if (($IPv4address.address -band $mask.address) -eq ($destinationIp.address -band $mask.address)) {
+								$doBackup = $true
+							}
+						}
+					}
+				}
+			}
+			catch {
+				$output = "ERROR: Could not get IP address for destination $possibleBackupDestination mapped to $backupMappedPath"
+				$emailBody = "$emailBody`r`n$output`r`n$_"
+				$error_during_backup = $true
+				echo $output  $_
+			}
+		}
+
+		if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
+				$backupDestination = $possibleBackupDestination
+				break
+		}	
+		
+	}
+}
+
+if ([string]::IsNullOrEmpty($LogFile)) {
+	$LogFile = Get-IniParameter "LogFile" "${FQDN}"
+}
+
 if ([string]::IsNullOrEmpty($LogFile)) {
 	# No log file specified from command line - put one in the backup destination with date-time stamp.
 	$logFileDestination = $backupDestination
@@ -582,6 +717,13 @@ catch
 	$deleteOldLogFiles = $False
 }
 
+
+#write the logs from the time we hadn't a logfile into the file
+if ($LogFile) {
+	$tempLogContent | Out-File "$LogFile"  -encoding ASCII -append
+}
+
+
 if ([string]::IsNullOrEmpty($backupSources)) {
 	# No backup sources on command line, in host-specific or common section of ini file
 	# backup sources are mandatory, so flag the problem.
@@ -592,122 +734,6 @@ if ([string]::IsNullOrEmpty($backupSources)) {
 		$output | Out-File "$LogFile"  -encoding ASCII -append
 	}
 	$parameters_ok = $False
-}
-
-if ([string]::IsNullOrEmpty($backupDestination)) {
-	# No backup destination on command line or in INI file
-	# backup destination is mandatory, so flag the problem.
-	$output = "`nERROR: No backup destination specified`n"
-	echo $output
-	$emailBody = "$emailBody`r`n$output`r`n"
-	if ($LogFile) {
-		$output | Out-File "$LogFile"  -encoding ASCII -append
-	}
-	$parameters_ok = $False
-} else {
-	# If the user wants to substitute a drive letter for the backup destination, do that now.
-	# Then following code can process the resulting "subst" in the same way as if the user had done it externally.
-	if (-not ([string]::IsNullOrEmpty($subst))) {
-		if ($subst -match "^[A-Z]:?$") {
-			$substDrive = $subst.Substring(0,1) + ":"
-			subst "$substDrive" $backupDestination
-			$backupDestination = $substDrive
-		} else {
-			$output = "`nERROR: subst parameter $subst is invalid`n"
-			echo $output
-			$emailBody = "$emailBody`r`n$output`r`n"
-			if ($LogFile) {
-				$output | Out-File "$LogFile"  -encoding ASCII -append
-			}
-			# Flag that there is a problem, but let following code process and report any other problems before bailing out.
-			$parameters_ok = $False
-		}
-	}
-	
-	# Process the backup destination to find out where it might be
-	$backupDestinationArray = $backupDestination.split("\")
-
-	if (($backupDestinationArray[0] -eq "") -and ($backupDestinationArray[1] -eq "")) {
-		# The destination is a UNC path (file share)
-		$backupDestinationTop = "\\" + $backupDestinationArray[2] + "\" + $backupDestinationArray[3] + "\"
-		$backupMappedPath = $backupDestinationTop
-		$backupHostName = $backupDestinationArray[2]
-	} else {
-		if (-not ($backupDestination -match ":")) {
-			# No drive letter specified. This could be an attempt at a relative path, so first resolve it to the full path.
-			# This allows us to use split-path -Qualifier below to get the actual drive letter
-			$backupDestination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($backupDestination)
-		}
-		$backupDestinationDrive = split-path $backupDestination -Qualifier
-		$backupDestinationTop = $backupDestinationDrive + "\"
-		# See if the disk letter is mapped to a file share somewhere.
-		$backupDriveObject = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$backupDestinationDrive'"
-		$backupMappedPath = $backupDriveObject.ProviderName
-		if ($backupMappedPath) {
-			$backupPathArray = $backupMappedPath.split("\")
-			if (($backupPathArray[0] -eq "") -and ($backupPathArray[1] -eq "")) {
-				# The underlying destination is a UNC path (file share)
-				$backupHostName = $backupPathArray[2]
-			}
-		} else {
-			# Maybe the user did a "subst" command. Check for that.
-			$substText = (Subst) | findstr "$backupDestinationDrive\\"
-			# Looks like R:\: => UNC\hostname.myoffice.company.org\sharename
-			$parts = $substText -Split "UNC\\"
-			if ($parts) {
-				$host_FQDN = $parts[1].split("\")[0]
-				if ($host_FQDN) {
-					$backupHostName = $host_FQDN
-					$backupMappedPath = "\\" + $parts[1]
-				}
-			}
-		}
-	}
-
-	if ($backupMappedPath) {
-		$backupMappedString = " (" + $backupMappedPath + ")"
-	} else {
-		$backupMappedString = ""
-	}
-
-	if (($localSubnetOnly -eq $True) -and ($backupHostName)) {
-		# Check that the name is in the same subnet as us.
-		# Note: This also works if the user gives a real IPv4 like "\\10.20.30.40\backupshare"
-		# $backupHostName would be 10.20.30.40 in that case.
-		# TODO: Handle IPv6 addresses also some day.
-		$doBackup = $false
-		try {
-			$destinationIpAddresses = [System.Net.Dns]::GetHostAddresses($backupHostName)
-			[IPAddress]$destinationIp = $destinationIpAddresses[0]
-
-			$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
-
-			foreach ($adapter in $localAdapters) {
-				# Belts and braces here - we have seen some systems that returned unusual adapters that had IPaddress 0.0.0.0 and no IPsubnet
-				# We want to ignore that sort of rubbish - the mask comparisons do not work.
-				if ($adapter.IPAddress[0]) {
-					[IPAddress]$IPv4Address = $adapter.IPAddress[0]
-					if ($adapter.IPSubnet[0]) {
-						if ($localSubnetMask -eq 0) {
-							[IPAddress]$mask = $adapter.IPSubnet[0]
-						} else {
-							[IPAddress]$mask = $localSubnetMask
-						}
-
-						if (($IPv4address.address -band $mask.address) -eq ($destinationIp.address -band $mask.address)) {
-							$doBackup = $true
-						}
-					}
-				}
-			}
-		}
-		catch {
-			$output = "ERROR: Could not get IP address for destination $backupDestination mapped to $backupMappedPath"
-			$emailBody = "$emailBody`r`n$output`r`n$_"
-			$error_during_backup = $true
-			echo $output  $_
-		}
-	}
 }
 
 # Just test for the existence of the top of the backup destination. "ln" will create any folders as needed, as long as the top exists.
