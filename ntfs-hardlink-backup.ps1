@@ -19,7 +19,9 @@
 .PARAMETER backupSources
     Source path of the backup. Can be a list separated by comma.
 .PARAMETER backupDestination
-    Path where the data should go to.
+	Path where the data should go to. Can be a list separated by comma.
+	The first destination that exists and, if localSubnetOnly is on, is in the local subnet, will be used.
+	The backup is only ever really done to 1 destination.
 .PARAMETER subst
 	Drive letter to substitute (subst) for the path specified in backupDestination.
 	Often useful if a NAS or other device is a problem when accessed directly by UNC path.
@@ -390,9 +392,7 @@ if ([string]::IsNullOrEmpty($backupSources)) {
 if ([string]::IsNullOrEmpty($backupDestination)) {
 	$backupDestinationList = Get-IniParameter "backupdestination" "${FQDN}"
 
-
 	if (-not [string]::IsNullOrEmpty($backupDestinationList)) {
-
 		$backupDestination = $backupDestinationList.split(",")
 	}	
 }
@@ -400,6 +400,9 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 if ([string]::IsNullOrEmpty($subst)) {
 	$subst = Get-IniParameter "subst" "${FQDN}"
 }
+
+# This is always a drive-like letter, so it looks usual in Windows to be upper-case
+$subst = $subst.toupper()
 
 if ($backupsToKeep -eq 0) {
 	$backupsToKeep = Get-IniParameter "backupstokeep" "${FQDN}"
@@ -560,12 +563,18 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 	$parameters_ok = $False
 } else {
 	foreach($possibleBackupDestination in $backupDestination) {
+		# Initialize vars used in this loop to ensure they do not end up with values from previous loop iterations.
+		$backupDestinationTop = ""
+		$backupMappedPath = ""
+		$backupHostName = ""
 
 		# If the user wants to substitute a drive letter for the backup destination, do that now.
 		# Then following code can process the resulting "subst" in the same way as if the user had done it externally.
 		if (-not ([string]::IsNullOrEmpty($subst))) {
 			if ($subst -match "^[A-Z]:?$") { #TODO add check if we try to subst a not UNC path
 				$substDrive = $subst.Substring(0,1) + ":"
+				# Delete any previous or externally-defined subst-ed drive on this letter.
+				# Send the output to null, as usually the first attempted delete will give an error, and we do not care.
 				subst "$substDrive" /d | Out-Null
 				subst "$substDrive" $possibleBackupDestination
 
@@ -597,6 +606,8 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 				$possibleBackupDestination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($possibleBackupDestination)
 			}
 			$backupDestinationDrive = split-path $possibleBackupDestination -Qualifier
+			# toupper the backupDestinationDrive string to help findstr below match the upper-case output of subst. 
+			# Also seems a reasonable thing to do in Windows, since drive letters are usually displayed in upper-case.
 			$backupDestinationDrive = $backupDestinationDrive.toupper()
 			$backupDestinationTop = $backupDestinationDrive + "\"
 			# See if the disk letter is mapped to a file share somewhere.
@@ -611,13 +622,19 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 			} else {
 				# Maybe the user did a "subst" command. Check for that.
 				$substText = (Subst) | findstr "$backupDestinationDrive\\"
-				# Looks like R:\: => UNC\hostname.myoffice.company.org\sharename
-				$parts = $substText -Split "UNC\\"
-				if ($parts) {
-					$host_FQDN = $parts[1].split("\")[0]
-					if ($host_FQDN) {
-						$backupHostName = $host_FQDN
-						$backupMappedPath = "\\" + $parts[1]
+				# Looks like one of:
+				# R:\: => UNC\hostname.myoffice.company.org\sharename
+				# R:\: => C:\some\folder\path
+				# If a subst exists, it should always split into 3 space-separated parts
+				$parts = $substText -Split " "
+				if (($parts[0]) -and ($parts[1]) -and ($parts[2])) {
+					$backupMappedPath = $parts[2]
+					if ($backupMappedPath -match "^UNC\\") {
+						$host_FQDN = $backupMappedPath.split("\")[1]
+						$backupMappedPath = "\" + $backupMappedPath.Substring(3)
+						if ($host_FQDN) {
+							$backupHostName = $host_FQDN
+						}
 					}
 				}
 			}
@@ -669,7 +686,7 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 		}
 
 		if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
-				$backupDestination = $possibleBackupDestination
+				$selectedBackupDestination = $possibleBackupDestination
 				break
 		}	
 		
@@ -682,7 +699,7 @@ if ([string]::IsNullOrEmpty($LogFile)) {
 
 if ([string]::IsNullOrEmpty($LogFile)) {
 	# No log file specified from command line - put one in the backup destination with date-time stamp.
-	$logFileDestination = $backupDestination
+	$logFileDestination = $selectedBackupDestination
 	if ($logFileDestination) {
 		$LogFile = "$logFileDestination\$dateTime.log"
 	} else {
@@ -717,12 +734,10 @@ catch
 	$deleteOldLogFiles = $False
 }
 
-
 #write the logs from the time we hadn't a logfile into the file
 if ($LogFile) {
 	$tempLogContent | Out-File "$LogFile"  -encoding ASCII -append
 }
-
 
 if ([string]::IsNullOrEmpty($backupSources)) {
 	# No backup sources on command line, in host-specific or common section of ini file
@@ -747,7 +762,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 		if ($backup_source.substring($backup_source.length-1,1) -eq "\") {
 			$backup_source=$backup_source.Substring(0,$backup_source.Length-1)
 		}
-		if (test-path $backup_source) {
+		if (test-path -LiteralPath $backup_source) {
 			$stepCounter = 1
 			$backupSourceArray = $backup_source.split("\")
 			if (($backupSourceArray[0] -eq "") -and ($backupSourceArray[1] -eq "")) {
@@ -769,7 +784,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$backup_source_folder = "["+$matches[1]+"]"
 			}		
 			
-			$actualBackupDestination = "$backupDestination\$backup_source_folder"
+			$actualBackupDestination = "$selectedBackupDestination\$backup_source_folder"
 
 			#if the user wants to keep just one backup we do a mirror without any date, so we don't need
 			#to copy files that are already there
@@ -890,8 +905,8 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			$lastBackupFolders = @()
 			$lastBackupFoldersPerYear = @{}
 			$lastBackupFoldersPerYearToKeep = @{}
-			If (Test-Path $backupDestination -pathType container) {
-				$oldBackupItems = Get-ChildItem -Force -Path $backupDestination | Where-Object {$_ -is [IO.DirectoryInfo]} | Sort-Object -Property Name
+			If (Test-Path $selectedBackupDestination -pathType container) {
+				$oldBackupItems = Get-ChildItem -Force -Path $selectedBackupDestination | Where-Object {$_ -is [IO.DirectoryInfo]} | Sort-Object -Property Name
 
 				#escape $backup_source_folder if we are doing backup of a full disk like D:\ to folder [D]
 				if ($backup_source_folder -match "\[[A-Z]\]") {
@@ -1027,13 +1042,13 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				#echo "$script_path\..\ln.exe $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
 				`cmd /c  "$script_path\..\ln.exe $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
 			} else {
-				echo "Delorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $backupDestination\$lastBackupFolderName"
+				echo "Delorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $selectedBackupDestination\$lastBackupFolderName"
 				if ($LogFile) {
-					"`r`nDelorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $backupDestination\$lastBackupFolderName" | Out-File "$LogFile"  -encoding ASCII -append
+					"`r`nDelorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $selectedBackupDestination\$lastBackupFolderName" | Out-File "$LogFile"  -encoding ASCII -append
 				}
 
-				#echo "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"
-				`cmd /c  "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$backupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"`
+				#echo "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"
+				`cmd /c  "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"`
 			}
 
 			$summary = ""
@@ -1053,7 +1068,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 
 			echo "done`n"
 
-			$summary = "`n------Summary-----`nBackup AT: $start_time FROM: $backup_source TO: $backupDestination$backupMappedString`n" + $summary
+			$summary = "`n------Summary-----`nBackup AT: $start_time FROM: $backup_source TO: $selectedBackupDestination$backupMappedString`n" + $summary
 			echo $summary
 
 			$emailBody = $emailBody + $summary
@@ -1086,7 +1101,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				}
 				$backupsDeleted = 0
 				while ($backupsDeleted -lt $backupsToDelete) {
-					$folderToDelete =  $backupDestination +"\"+ $lastBackupFolders[$backupsDeleted].Name
+					$folderToDelete =  $selectedBackupDestination +"\"+ $lastBackupFolders[$backupsDeleted].Name
 					echo "Deleting $folderToDelete"
 					if ($LogFile) {
 						"`r`nDeleting $folderToDelete" | Out-File "$LogFile"  -encoding ASCII -append
@@ -1242,11 +1257,6 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 	}
 }
 
-if (-not ([string]::IsNullOrEmpty($substDrive))) {
-	# Delete any drive letter substitution done earlier
-	subst "$substDrive" /D
-}
-
 if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	echo "============Sending Email============"
 	$stepCounter = 1
@@ -1336,4 +1346,10 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	}
 
 	echo "done"
+}
+
+if (-not ([string]::IsNullOrEmpty($substDrive))) {
+	# Delete any drive letter substitution done earlier
+	# Note: the subst drive might have contained the log file, so we cannot delete earlier since it is needed to zip and email.
+	subst "$substDrive" /D
 }
