@@ -96,7 +96,7 @@
     Backup with more than one source.
 .NOTES
     Author: Artur Neumann, Phil Davis *INFN*
-	Version: 2.0.ALPHA.5
+	Version: 2.0.ALPHA.6
 #>
 
 [CmdletBinding()]
@@ -226,8 +226,9 @@ Function Get-IniContent
     Process 
     { 
         Write-Verbose "$($MyInvocation.MyCommand.Name):: Processing file: $Filepath" 
-             
-        $ini = @{} 
+        
+	#changed from HashTable to OrderedDictionary to keep the sections in the order they were added - Artur Neumann
+        $ini = New-Object System.Collections.Specialized.OrderedDictionary
         switch -regex -file $FilePath 
         { 
             "^\[(.+)\]$" # Section 
@@ -273,7 +274,7 @@ Function Get-IniContent
 
 Function Get-IniParameter
 {
-	# Note: iniFileContent hash table is not passed in each time.
+	# Note: iniFileContent dictionary is not passed in each time.
 	# Just use the global value to reference that.
 	[CmdletBinding()]
 	Param(
@@ -282,7 +283,7 @@ Function Get-IniParameter
 		[string]$ParameterName,
 		[ValidateNotNullOrEmpty()]
 		[Parameter(Mandatory=$True)]
-		[string]$IniSection
+		[string]$FQDN
 	)
 
 	Begin
@@ -290,24 +291,48 @@ Function Get-IniParameter
 
 	Process
     {
-		Write-Verbose "$($MyInvocation.MyCommand.Name):: Processing for IniSection: $IniSection and ParameterName: $ParameterName"
+		Write-Verbose "$($MyInvocation.MyCommand.Name):: Processing for IniSection: $FQDN and ParameterName: $ParameterName"
 
 		# Use ToLower to make all parameter name comparisons case-insensitive
 		$ParameterName = $ParameterName.ToLower()
 		$ParameterValue = $Null
 
-		if ($global:iniFileContent.ContainsKey("common")) {
+		$FQDN=$FQDN.ToLower()
+		
+		#search first the "common" section for the parameter, this will have the lowest priority
+		#as the parameter can be overwritten by other sections
+		if ($global:iniFileContent.Contains("common")) {
 			if (-not [string]::IsNullOrEmpty($global:iniFileContent["common"][$ParameterName])) {
 				$ParameterValue = $global:iniFileContent["common"][$ParameterName]
 			}
 		}
-		if ($global:iniFileContent.ContainsKey($IniSection)) {
-			if (-not [string]::IsNullOrEmpty($global:iniFileContent[$IniSection][$ParameterName])) {
-				$ParameterValue = $global:iniFileContent[$IniSection][$ParameterName]
-			}
+		
+		#search if there is a section that matches the FQDN 
+		#this is the second highest priority, as the parameter can still be overwritten by the
+		#section that meets exactly the FQDN
+		#If there are more than one section that matches the FQDN with the same parameter
+		#the section farest down in the ini file will be used 
+		foreach($IniSection in $($global:iniFileContent.keys)){
+			$EscapedIniSection=$IniSection -replace "([\-\[\]\{\}\(\)\+\?\.\,\\\^\$\|\#])",'\$1'
+			$EscapedIniSection=$IniSection -replace "\*",'.*'
+			if ($FQDN -match "^$EscapedIniSection$") {
+				
+				if (-not [string]::IsNullOrEmpty($global:iniFileContent[$IniSection][$ParameterName])) {
+					$ParameterValue = $global:iniFileContent[$IniSection][$ParameterName]
+				}
+			}	
 		}
 
-		Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing for IniSection: $IniSection and ParameterName: $ParameterName ParameterValue: $ParameterValue"
+		#see if there is section that is called exactly the same like the computer (FQDN)
+		#this is the highest priority, so if the same parameters are used in other sections
+		#this section will overwrite them
+		if ($global:iniFileContent.Contains($FQDN)) {
+			if (-not [string]::IsNullOrEmpty($global:iniFileContent[$FQDN][$ParameterName])) {
+				$ParameterValue = $global:iniFileContent[$FQDN][$ParameterName]
+			}
+		}
+		
+		Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing for IniSection: $FQDN and ParameterName: $ParameterName ParameterValue: $ParameterValue"
 		Return $ParameterValue
     }
 
@@ -371,13 +396,13 @@ if ($iniFile) {
 		echo $output
 		$global:iniFileContent = Get-IniContent "${iniFile}"
 	} else {
-		$global:iniFileContent = @{}
+		$global:iniFileContent =  New-Object System.Collections.Specialized.OrderedDictionary
 		$output = "ERROR: Could not find ini file`r`n$iniFile`r`n"
 		$emailBody = "$emailBody`r`n$output`r`n"
 		echo $output
 	}
 } else {
-		$global:iniFileContent = @{}
+		$global:iniFileContent =  New-Object System.Collections.Specialized.OrderedDictionary
 }
 
 $parameters_ok = $True
@@ -689,7 +714,6 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 				$selectedBackupDestination = $possibleBackupDestination
 				break
 		}	
-		
 	}
 }
 
