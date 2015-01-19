@@ -88,6 +88,12 @@
 	Default is to write "yyyy-mm-dd hh-mm-ss.log" in the backup destination folder.
 .PARAMETER StepTiming
     Switch on display of the time at each step of the job.
+.PARAMETER preExecutionCommand
+    command to run before the start of the backup
+.PARAMETER preExecutionDelay
+    time in milliseconds to pause between running the preExecutionCommand and the start of the backup. Default = 0
+.PARAMETER postExecutionCommand
+    command to run after the backup is done
 .EXAMPLE
     PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources D:\backup_source1 -backupDestination E:\backup_dest -emailTo "me@example.org" -emailFrom "backup@example.org" -SMTPServer example.org -SMTPUser "backup@example.org" -SMTPPassword "secr4et"
     Simple backup.
@@ -160,7 +166,13 @@ Param(
 	[Parameter(Mandatory=$False)]
 	[string]$LogFile="",
 	[Parameter(Mandatory=$False)]
-	[switch]$StepTiming=$False
+	[switch]$StepTiming=$False,
+	[Parameter(Mandatory=$False)]
+	[string]$preExecutionCommand="",
+	[Parameter(Mandatory=$False)]
+	[Int32]$preExecutionDelay,
+	[Parameter(Mandatory=$False)]
+	[string]$postExecutionCommand=""
 )
 
 Function Get-IniContent 
@@ -388,6 +400,7 @@ $backupHostName = ""
 $deleteOldLogFiles = $False
 $FQDN = [System.Net.DNS]::GetHostByName('').HostName
 $userName = [Environment]::UserName
+$tempLogContent = ""
 
 if ($iniFile) {
 	if (Test-Path -Path $iniFile -PathType leaf) {
@@ -573,6 +586,56 @@ if ([string]::IsNullOrEmpty($emailSubject)) {
 	$emailSubject = "Backup of: ${FQDN} ${emailJobName}by: ${userName}"
 }
 
+if ([string]::IsNullOrEmpty($preExecutionCommand)) {
+	$preExecutionCommand = Get-IniParameter "preExecutionCommand" "${FQDN}"
+}	
+
+if (![string]::IsNullOrEmpty($preExecutionCommand)) {
+	$output = "`nrunning preexecution command ($preExecutionCommand)`n"
+	echo $output
+	$tempLogContent += $output
+	
+	$output = `cmd /c  $preExecutionCommand`
+	
+	$output += "`n"
+	echo $output
+	$tempLogContent += $output
+	}
+	
+if ($preExecutionDelay -eq 0) {
+	$preExecutionDelay = Get-IniParameter "preExecutionDelay" "${FQDN}"
+	if ($preExecutionDelay -eq 0) {
+		$preExecutionDelay = 0;
+	}
+}
+
+
+if ($preExecutionDelay -gt 0) {
+	echo "I'm gona be lazy now"
+	
+	Write-Host -NoNewline "
+
+         ___    z
+       _/   |  z
+      |_____|{)_
+        --- ==\/\ |
+      [_____]  __)|
+      |   |  //| |
+	"
+	$CursorTop=[Console]::CursorTop
+	[Console]::SetCursorPosition(18,$CursorTop-7)
+	for ($msSleeped=0;$msSleeped -lt $preExecutionDelay; $msSleeped+=1000){
+		Start-sleep -milliseconds 1000
+		Write-Host -NoNewline "z "
+	}	
+	[Console]::SetCursorPosition(0,$CursorTop)
+	Write-Host "I guess it's time to wake up.`n"
+}
+
+if ([string]::IsNullOrEmpty($postExecutionCommand)) {
+	$postExecutionCommand = Get-IniParameter "postExecutionCommand" "${FQDN}"
+}	
+
 $dateTime = get-date -f "yyyy-MM-dd HH-mm-ss"
 $script_path = Split-Path -parent $MyInvocation.MyCommand.Definition
 
@@ -583,7 +646,7 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 	echo $output
 	$emailBody = "$emailBody`r`n$output`r`n"
 	
-	$tempLogContent = $output
+	$tempLogContent += $output
 	
 	$parameters_ok = $False
 } else {
@@ -1376,4 +1439,12 @@ if (-not ([string]::IsNullOrEmpty($substDrive))) {
 	# Delete any drive letter substitution done earlier
 	# Note: the subst drive might have contained the log file, so we cannot delete earlier since it is needed to zip and email.
 	subst "$substDrive" /D
+}
+
+if (-not ([string]::IsNullOrEmpty($postExecutionCommand))) {
+	echo "`nrunning postexecution command ($postExecutionCommand)`n"
+	$output = `cmd /c  $postExecutionCommand`
+	
+	$output += "`n"
+	echo $output
 }
