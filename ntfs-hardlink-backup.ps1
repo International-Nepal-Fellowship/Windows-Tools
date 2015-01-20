@@ -595,7 +595,7 @@ if (![string]::IsNullOrEmpty($preExecutionCommand)) {
 	echo $output
 	$tempLogContent += $output
 	
-	$output = `cmd /c  $preExecutionCommand`
+	$output = `cmd /c  `"$preExecutionCommand`"`
 	
 	$output += "`n"
 	echo $output
@@ -1444,7 +1444,7 @@ if (-not ([string]::IsNullOrEmpty($substDrive))) {
 
 if (-not ([string]::IsNullOrEmpty($postExecutionCommand))) {
 	echo "`nrunning postexecution command ($postExecutionCommand)`n"
-	$output = `cmd /c  $postExecutionCommand`
+	$output = `cmd /c  `"$postExecutionCommand`"`
 
 	$output += "`n"
 	echo $output
