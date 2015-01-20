@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-    This software is used for creating hard-link-backups.
+	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
 	INSTALLATION:
 	1. Read the documentation of "ln" http://schinagl.priv.at/nt/ln/ln.html
@@ -17,7 +17,7 @@
 .PARAMETER iniFile
 	Path to an optional INI file that contains any of the parameters.
 .PARAMETER backupSources
-    Source path of the backup. Can be a list separated by comma.
+	Source path of the backup. Can be a list separated by comma.
 .PARAMETER backupDestination
 	Path where the data should go to. Can be a list separated by comma.
 	The first destination that exists and, if localSubnetOnly is on, is in the local subnet, will be used.
@@ -27,11 +27,11 @@
 	Often useful if a NAS or other device is a problem when accessed directly by UNC path.
 	Sometimes if a drive letter is substituted for the UNC path then things work.
 .PARAMETER backupsToKeep
-    How many backup copies should be kept. All older backups and their log files will be deleted. 1 means mirror. Default=50
+	How many backup copies should be kept. All older backups and their log files will be deleted. 1 means mirror. Default=50
 .PARAMETER backupsToKeepPerYear
-    How many backup copies of every year should be kept. This will add to the number of backupsToKeep. Default=0
+	How many backup copies of every year should be kept. This will add to the number of backupsToKeep. Default=0
 .PARAMETER timeTolerance
-    Sometimes useful to not have an exact timestamp comparison between source and dest, but kind of a fuzzy comparison, because the system time of NAS drives is not exactly synced with the host.
+	Sometimes useful to not have an exact timestamp comparison between source and dest, but kind of a fuzzy comparison, because the system time of NAS drives is not exactly synced with the host.
 	To overcome this we use the -timeTolerance switch to specify a value in milliseconds.
 .PARAMETER exclude
 	Exclude files via wildcards. Can be a list separated by comma.
@@ -51,58 +51,58 @@
 	Using the Backup Mode ACLs aka Access Control Lists, which contain the security for Files, Folders, Junctions or SymbolicLinks, and Encrypted Files are also copied.
 	see http://schinagl.priv.at/nt/ln/ln.html#backup
 .PARAMETER localSubnetOnly
-    Switch on to only run the backup when the destination is a local disk or a server in the same subnet.
+	Switch on to only run the backup when the destination is a local disk or a server in the same subnet.
 	This is useful for scheduled network backups that should only run when the laptop is on the home office network.
 .PARAMETER localSubnetMask
 	The size of the IPv4 netmask (CIDR) that covers all the networks that should be considered local to the backup destination IPv4 address.
 	Use this in an office with multiple subnets that can all be covered (summarised) by a single netmask.
 	Without this parameter the default is to use the subnet mask of the local machine interface(s).
 .PARAMETER emailTo
-    Address to be notified about success and problems. If not given no Emails will be sent.
+	Address to be notified about success and problems. If not given no Emails will be sent.
 .PARAMETER emailFrom
-    Address the notification email is sent from. If not given no Emails will be sent.
+	Address the notification email is sent from. If not given no Emails will be sent.
 .PARAMETER SMTPServer
-    Domainname of the SMTP Server. If not given no Emails will be sent.
+	Domainname of the SMTP Server. If not given no Emails will be sent.
 .PARAMETER SMTPUser
-    Username if the SMTP Server needs authentication.
+	Username if the SMTP Server needs authentication.
 .PARAMETER SMTPPassword
-    Password if the SMTP Server needs authentication.
+	Password if the SMTP Server needs authentication.
 .PARAMETER SMTPTimeout
-    Timeout in ms for the Email to be send. Default 60000.
+	Timeout in ms for the Email to be send. Default 60000.
 .PARAMETER NoSMTPOverSSL
-    Switch off the use of SSL to send Emails.
+	Switch off the use of SSL to send Emails.
 .PARAMETER NoShadowCopy
-    Switch off the use of Shadow Copies. Can be useful if you have no permissions to create Shadow Copies.
+	Switch off the use of Shadow Copies. Can be useful if you have no permissions to create Shadow Copies.
 .PARAMETER SMTPPort
-    Port of the SMTP Server. Default=587
+	Port of the SMTP Server. Default=587
 .PARAMETER emailJobName
-    This is added in to the auto-generated email subject "Backup of: hostname emailJobName by: username"
+	This is added in to the auto-generated email subject "Backup of: hostname emailJobName by: username"
 .PARAMETER emailSubject
-    Subject for the notification Email. This overrides the auto-generated email subject and emailJobName.
+	Subject for the notification Email. This overrides the auto-generated email subject and emailJobName.
 .PARAMETER emailSendRetries
-    How often should we try to resend the Email. Default = 100
+	How often should we try to resend the Email. Default = 100
 .PARAMETER msToPauseBetweenEmailSendRetries
-    Time in ms to wait between the resending of the Email. Default = 60000
+	Time in ms to wait between the resending of the Email. Default = 60000
 .PARAMETER LogFile
-    Path and filename for the logfile. If just a path is given, then "yyyy-mm-dd hh-mm-ss.log" is written to that folder.
+	Path and filename for the logfile. If just a path is given, then "yyyy-mm-dd hh-mm-ss.log" is written to that folder.
 	Default is to write "yyyy-mm-dd hh-mm-ss.log" in the backup destination folder.
 .PARAMETER StepTiming
-    Switch on display of the time at each step of the job.
+	Switch on display of the time at each step of the job.
 .PARAMETER preExecutionCommand
-    command to run before the start of the backup
+	Command to run before the start of the backup.
 .PARAMETER preExecutionDelay
-    time in milliseconds to pause between running the preExecutionCommand and the start of the backup. Default = 0
+	Time in milliseconds to pause between running the preExecutionCommand and the start of the backup. Default = 0
 .PARAMETER postExecutionCommand
-    command to run after the backup is done
+	Command to run after the backup is done.
 .EXAMPLE
-    PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources D:\backup_source1 -backupDestination E:\backup_dest -emailTo "me@example.org" -emailFrom "backup@example.org" -SMTPServer example.org -SMTPUser "backup@example.org" -SMTPPassword "secr4et"
-    Simple backup.
+	PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources D:\backup_source1 -backupDestination E:\backup_dest -emailTo "me@example.org" -emailFrom "backup@example.org" -SMTPServer example.org -SMTPUser "backup@example.org" -SMTPPassword "secr4et"
+	Simple backup.
 .EXAMPLE
-    PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources "D:\backup_source1","C:\backup_source2" -backupDestination E:\backup_dest -emailTo "me@example.org" -emailFrom "backup@example.org" -SMTPServer example.org -SMTPUser "backup@example.org" -SMTPPassword "secr4et"
-    Backup with more than one source.
+	PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources "D:\backup_source1","C:\backup_source2" -backupDestination E:\backup_dest -emailTo "me@example.org" -emailFrom "backup@example.org" -SMTPServer example.org -SMTPUser "backup@example.org" -SMTPPassword "secr4et"
+	Backup with more than one source.
 .NOTES
-    Author: Artur Neumann, Phil Davis *INFN*
-	Version: 2.0.ALPHA.6
+	Author: Artur Neumann, Phil Davis *INFN*
+	Version: 2.0.ALPHA.7
 #>
 
 [CmdletBinding()]
@@ -119,7 +119,7 @@ Param(
 	[Int32]$backupsToKeep,
 	[Parameter(Mandatory=$False)]
 	[Int32]$backupsToKeepPerYear,
-	[Parameter(Mandatory=$False)]	
+	[Parameter(Mandatory=$False)]
 	[string]$emailTo="",
 	[Parameter(Mandatory=$False)]
 	[string]$emailFrom="",
@@ -153,7 +153,7 @@ Param(
 	[switch]$splice,
 	[Parameter(Mandatory=$False)]
 	[switch]$backupModeACLs,
-	[Parameter(Mandatory=$False)]	
+	[Parameter(Mandatory=$False)]
 	[switch]$localSubnetOnly,
 	[Parameter(Mandatory=$False)]
 	[Int32]$localSubnetMask,
@@ -175,113 +175,113 @@ Param(
 	[string]$postExecutionCommand=""
 )
 
-Function Get-IniContent 
-{ 
-    <# 
-    .Synopsis 
-        Gets the content of an INI file 
-         
-    .Description 
-        Gets the content of an INI file and returns it as a hashtable 
-         
-    .Notes 
-        Author    : Oliver Lipkau <oliver@lipkau.net> 
-        Blog      : http://oliver.lipkau.net/blog/ 
-        Date      : 2014/06/23 
-        Version   : 1.1 
-         
-        #Requires -Version 2.0 
-         
-    .Inputs 
-        System.String 
-         
-    .Outputs 
-        System.Collections.Hashtable 
-         
-    .Parameter FilePath 
-        Specifies the path to the input file. 
-         
-    .Example 
-        $FileContent = Get-IniContent "C:\myinifile.ini" 
-        ----------- 
-        Description 
-        Saves the content of the c:\myinifile.ini in a hashtable called $FileContent 
-     
-    .Example 
-        $inifilepath | $FileContent = Get-IniContent 
-        ----------- 
-        Description 
-        Gets the content of the ini file passed through the pipe into a hashtable called $FileContent 
-     
-    .Example 
-        C:\PS>$FileContent = Get-IniContent "c:\settings.ini" 
-        C:\PS>$FileContent["Section"]["Key"] 
-        ----------- 
-        Description 
-        Returns the key "Key" of the section "Section" from the C:\settings.ini file 
-         
-    .Link 
-        Out-IniFile 
-    #> 
-     
-    [CmdletBinding()] 
-    Param( 
-        [ValidateNotNullOrEmpty()] 
-        [ValidateScript({(Test-Path $_) -and ((Get-Item $_).Extension -eq ".ini")})] 
-        [Parameter(ValueFromPipeline=$True,Mandatory=$True)] 
-        [string]$FilePath 
-    ) 
-     
-    Begin 
-        {Write-Verbose "$($MyInvocation.MyCommand.Name):: Function started"} 
-         
-    Process 
-    { 
-        Write-Verbose "$($MyInvocation.MyCommand.Name):: Processing file: $Filepath" 
-        
-	#changed from HashTable to OrderedDictionary to keep the sections in the order they were added - Artur Neumann
-        $ini = New-Object System.Collections.Specialized.OrderedDictionary
-        switch -regex -file $FilePath 
-        { 
-            "^\[(.+)\]$" # Section 
-            { 
-                $section = $matches[1] 
+Function Get-IniContent
+{
+	<#
+	.Synopsis
+		Gets the content of an INI file
+
+	.Description
+		Gets the content of an INI file and returns it as a hashtable
+
+	.Notes
+		Author    : Oliver Lipkau <oliver@lipkau.net>
+		Blog      : http://oliver.lipkau.net/blog/
+		Date      : 2014/06/23
+		Version   : 1.1
+
+		#Requires -Version 2.0
+
+	.Inputs
+		System.String
+
+	.Outputs
+		System.Collections.Hashtable
+
+	.Parameter FilePath
+		Specifies the path to the input file.
+
+	.Example
+		$FileContent = Get-IniContent "C:\myinifile.ini"
+		-----------
+		Description
+		Saves the content of the c:\myinifile.ini in a hashtable called $FileContent
+
+	.Example
+		$inifilepath | $FileContent = Get-IniContent
+		-----------
+		Description
+		Gets the content of the ini file passed through the pipe into a hashtable called $FileContent
+
+	.Example
+		C:\PS>$FileContent = Get-IniContent "c:\settings.ini"
+		C:\PS>$FileContent["Section"]["Key"]
+		-----------
+		Description
+		Returns the key "Key" of the section "Section" from the C:\settings.ini file
+
+	.Link
+		Out-IniFile
+	#>
+
+	[CmdletBinding()]
+	Param(
+		[ValidateNotNullOrEmpty()]
+		[ValidateScript({(Test-Path $_) -and ((Get-Item $_).Extension -eq ".ini")})]
+		[Parameter(ValueFromPipeline=$True,Mandatory=$True)]
+		[string]$FilePath
+	)
+
+	Begin
+		{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function started"}
+
+	Process
+	{
+		Write-Verbose "$($MyInvocation.MyCommand.Name):: Processing file: $Filepath"
+
+		#changed from HashTable to OrderedDictionary to keep the sections in the order they were added - Artur Neumann
+		$ini = New-Object System.Collections.Specialized.OrderedDictionary
+		switch -regex -file $FilePath
+		{
+			"^\[(.+)\]$" # Section
+			{
+				$section = $matches[1]
 				# Added ToLower line to make INI file case-insensitive - Phil Davis
 				$section = $section.ToLower()
-                $ini[$section] = @{} 
-                $CommentCount = 0 
-            } 
-            "^(;.*)$" # Comment 
-            { 
-                if (!($section)) 
-                { 
-                    $section = "No-Section" 
-                    $ini[$section] = @{} 
-                } 
-                $value = $matches[1] 
-                $CommentCount = $CommentCount + 1 
-                $name = "Comment" + $CommentCount 
-                $ini[$section][$name] = $value 
-            }  
-            "(.+?)\s*=\s*(.*)" # Key 
-            { 
-                if (!($section)) 
-                { 
-                    $section = "No-Section" 
-                    $ini[$section] = @{} 
-                } 
-                $name,$value = $matches[1..2] 
+				$ini[$section] = @{}
+				$CommentCount = 0
+			}
+			"^(;.*)$" # Comment
+			{
+				if (!($section))
+				{
+					$section = "No-Section"
+					$ini[$section] = @{}
+				}
+				$value = $matches[1]
+				$CommentCount = $CommentCount + 1
+				$name = "Comment" + $CommentCount
+				$ini[$section][$name] = $value
+			}
+			"(.+?)\s*=\s*(.*)" # Key
+			{
+				if (!($section))
+				{
+					$section = "No-Section"
+					$ini[$section] = @{}
+				}
+				$name,$value = $matches[1..2]
 				# Added ToLower line to make INI file case-insensitive - Phil Davis
 				$name = $name.ToLower()
-                $ini[$section][$name] = $value 
-            } 
-        } 
-        Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing file: $FilePath" 
-        Return $ini 
-    } 
-         
-    End 
-        {Write-Verbose "$($MyInvocation.MyCommand.Name):: Function ended"} 
+				$ini[$section][$name] = $value
+			}
+		}
+		Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing file: $FilePath"
+		Return $ini
+	}
+
+	End
+	{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function ended"}
 }
 
 Function Get-IniParameter
@@ -302,7 +302,7 @@ Function Get-IniParameter
 		{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function started"}
 
 	Process
-    {
+	{
 		Write-Verbose "$($MyInvocation.MyCommand.Name):: Processing for IniSection: $FQDN and ParameterName: $ParameterName"
 
 		# Use ToLower to make all parameter name comparisons case-insensitive
@@ -318,24 +318,23 @@ Function Get-IniParameter
 				$ParameterValue = $global:iniFileContent["common"][$ParameterName]
 			}
 		}
-		
+
 		#search if there is a section that matches the FQDN 
 		#this is the second highest priority, as the parameter can still be overwritten by the
 		#section that meets exactly the FQDN
-		#If there are more than one section that matches the FQDN with the same parameter
-		#the section farest down in the ini file will be used 
-		foreach($IniSection in $($global:iniFileContent.keys)){
+		#If there is more than one section that matches the FQDN with the same parameter
+		#the section furthest down in the ini file will be used 
+		foreach ($IniSection in $($global:iniFileContent.keys)){
 			$EscapedIniSection=$IniSection -replace "([\-\[\]\{\}\(\)\+\?\.\,\\\^\$\|\#])",'\$1'
 			$EscapedIniSection=$IniSection -replace "\*",'.*'
 			if ($FQDN -match "^$EscapedIniSection$") {
-				
 				if (-not [string]::IsNullOrEmpty($global:iniFileContent[$IniSection][$ParameterName])) {
 					$ParameterValue = $global:iniFileContent[$IniSection][$ParameterName]
 				}
-			}	
+			}
 		}
 
-		#see if there is section that is called exactly the same like the computer (FQDN)
+		#see if there is section that is called exactly the same as the computer (FQDN)
 		#this is the highest priority, so if the same parameters are used in other sections
 		#this section will overwrite them
 		if ($global:iniFileContent.Contains($FQDN)) {
@@ -555,6 +554,7 @@ if (-not $localSubnetOnly.IsPresent) {
 if ($localSubnetMask -eq 0) {
 	$localSubnetMask = Get-IniParameter "localSubnetMask" "${FQDN}"
 	if ($localSubnetMask -eq 0) {
+		# Looks dumb, but left here if you want to change the default from zero.
 		$localSubnetMask = 0;
 	}
 }
@@ -605,6 +605,7 @@ if (![string]::IsNullOrEmpty($preExecutionCommand)) {
 if ($preExecutionDelay -eq 0) {
 	$preExecutionDelay = Get-IniParameter "preExecutionDelay" "${FQDN}"
 	if ($preExecutionDelay -eq 0) {
+		# Looks dumb, but left here if you want to change the default from zero.
 		$preExecutionDelay = 0;
 	}
 }
@@ -612,7 +613,7 @@ if ($preExecutionDelay -eq 0) {
 
 if ($preExecutionDelay -gt 0) {
 	echo "I'm gona be lazy now"
-	
+
 	Write-Host -NoNewline "
 
          ___    z
@@ -634,7 +635,7 @@ if ($preExecutionDelay -gt 0) {
 
 if ([string]::IsNullOrEmpty($postExecutionCommand)) {
 	$postExecutionCommand = Get-IniParameter "postExecutionCommand" "${FQDN}"
-}	
+}
 
 $dateTime = get-date -f "yyyy-MM-dd HH-mm-ss"
 $script_path = Split-Path -parent $MyInvocation.MyCommand.Definition
@@ -650,7 +651,7 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 	
 	$parameters_ok = $False
 } else {
-	foreach($possibleBackupDestination in $backupDestination) {
+	foreach ($possibleBackupDestination in $backupDestination) {
 		# Initialize vars used in this loop to ensure they do not end up with values from previous loop iterations.
 		$backupDestinationTop = ""
 		$backupMappedPath = ""
@@ -840,7 +841,7 @@ if ([string]::IsNullOrEmpty($backupSources)) {
 
 # Just test for the existence of the top of the backup destination. "ln" will create any folders as needed, as long as the top exists.
 if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
-	foreach($backup_source in $backupSources)
+	foreach ($backup_source in $backupSources)
 	{
 		#We don't want to have "\" at the end because we will quote the path later and ln.exe would 
 		#treat this as escaping of the quote (\") and can not parse the command line.
@@ -1106,7 +1107,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			}
 
 			$excludeString=" "
-			foreach($item in $exclude) {
+			foreach ($item in $exclude) {
 				if ($item -AND $item.Trim()) {
 					$excludeString = "$excludeString --exclude $item "
 				}
@@ -1141,7 +1142,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			$summary = ""
 			if ($LogFile) {
 				$backup_response = get-content "$LogFile"
-				foreach( $line in $backup_response.length..1 ) {
+				foreach ( $line in $backup_response.length..1 ) {
 					$summary =  $backup_response[$line] + "`n" + $summary
 					
 					if ($backup_response[$line] -match '(.*):\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s*([1-9]+\d*(?:\,\d*)?)') {
@@ -1444,7 +1445,7 @@ if (-not ([string]::IsNullOrEmpty($substDrive))) {
 if (-not ([string]::IsNullOrEmpty($postExecutionCommand))) {
 	echo "`nrunning postexecution command ($postExecutionCommand)`n"
 	$output = `cmd /c  $postExecutionCommand`
-	
+
 	$output += "`n"
 	echo $output
 }
