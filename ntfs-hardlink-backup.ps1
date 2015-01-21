@@ -989,6 +989,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			echo "Source: $backup_source_path"
 			echo "Destination: $actualBackupDestination$backupMappedString"
 
+			$yearBackupsKeptText = ""
 			$lastBackupFolderName = ""
 			$lastBackupFolders = @()
 			$lastBackupFoldersPerYear = @{}
@@ -1010,7 +1011,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					#find all backups per year
 					foreach ($item in $oldBackupItems) {
 						if ($item.Name  -match '^'+$escaped_backup_source_folder+' - (\d{4})-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' ) {
-							if (!($lastBackupFoldersPerYear.ContainsKey($matches[1]))) {	
+							if (!($lastBackupFoldersPerYear.ContainsKey($matches[1]))) {
 								$lastBackupFoldersPerYear[$matches[1]] = @()
 							}
 							$lastBackupFoldersPerYear[$matches[1]]+= $item
@@ -1018,7 +1019,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					}
 				
 					#decide which backups from the last year to keep
-					foreach ($year in $($lastBackupFoldersPerYear.keys)) {
+					foreach ($year in $($lastBackupFoldersPerYear.keys | sort)) {
 						#echo $year
 						if (!($lastBackupFoldersPerYearToKeep.ContainsKey($year))) {
 							$lastBackupFoldersPerYearToKeep[$year] = @()
@@ -1051,6 +1052,8 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 								$lastBackupFoldersPerYear[$year] = $lastBackupFoldersPerYear[$year] -ne $bestBackupToKeep
 							}	
 						}
+						$thisYearBackupsKept = $lastBackupFoldersPerYearToKeep[$year].length
+						$yearBackupsKeptText += "Keeping $thisYearBackupsKept backup(s) from $year `r`n"
 					}
 				
 				}
@@ -1173,7 +1176,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			#plus 1 because we just created a new backup but we have checked for old backups before we have
 			#created the new one
 			$backupsInDestination = $lastBackupFolders.length + 1
-			$summary = "`nFound $backupsInDestination backup(s), keeping a maximum of $backupsToKeep backup(s)`n"
+			$summary = $yearBackupsKeptText + "Found $backupsInDestination regular backup(s), keeping a maximum of $backupsToKeep regular backup(s)`n"
 			echo $summary
 
 			if ($LogFile) {
