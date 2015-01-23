@@ -346,9 +346,20 @@ Function Get-IniParameter
 			}
 		}
 			
-		if ($doNotSubstitute -eq $False -and ($ParameterValue -match "<(.*)>") -and ($(test-path env:$($matches[1]))) ) {	
-			$substituteValue=$(get-childitem -path env:$($matches[1])).Value
-			$ParameterValue =$ParameterValue -replace "<.*>",$substituteValue
+		#replace all <parameter> with the parameter values
+		if ($doNotSubstitute -eq $False) {
+			$substituteMatches=$ParameterValue | Select-String -AllMatches '<[^<]+?>' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Value			
+			
+			foreach ($match in $substituteMatches) {
+				if(![string]::IsNullOrEmpty($match)) {            
+					$match=$($match.Trim())
+					$cleanMatch=$match.Replace("<","").Replace(">","")
+					if ($(test-path env:$($cleanMatch))) {					
+						$substituteValue=$(get-childitem -path env:$($cleanMatch)).Value
+						$ParameterValue =$ParameterValue.Replace($match,$substituteValue)
+					}
+				}
+			}
 		}
 		
 		Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing for IniSection: $FQDN and ParameterName: $ParameterName ParameterValue: $ParameterValue"
