@@ -102,7 +102,7 @@
 	Backup with more than one source.
 .NOTES
 	Author: Artur Neumann, Phil Davis *INFN*
-	Version: 2.0.ALPHA.7
+	Version: 2.0.ALPHA.8
 #>
 
 [CmdletBinding()]
@@ -295,7 +295,10 @@ Function Get-IniParameter
 		[string]$ParameterName,
 		[ValidateNotNullOrEmpty()]
 		[Parameter(Mandatory=$True)]
-		[string]$FQDN
+		[string]$FQDN,
+		[ValidateNotNullOrEmpty()]
+		[Parameter(Mandatory=$False)]
+		[switch]$doNotSubstitute=$False
 	)
 
 	Begin
@@ -341,6 +344,11 @@ Function Get-IniParameter
 			if (-not [string]::IsNullOrEmpty($global:iniFileContent[$FQDN][$ParameterName])) {
 				$ParameterValue = $global:iniFileContent[$FQDN][$ParameterName]
 			}
+		}
+			
+		if ($doNotSubstitute -eq $False -and ($ParameterValue -match "<(.*)>") -and ($(test-path env:$($matches[1]))) ) {	
+			$substituteValue=$(get-childitem -path env:$($matches[1])).Value
+			$ParameterValue =$ParameterValue -replace "<.*>",$substituteValue
 		}
 		
 		Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing for IniSection: $FQDN and ParameterName: $ParameterName ParameterValue: $ParameterValue"
@@ -472,7 +480,7 @@ if ([string]::IsNullOrEmpty($SMTPUser)) {
 }
 
 if ([string]::IsNullOrEmpty($SMTPPassword)) {
-	$SMTPPassword = Get-IniParameter "SMTPPassword" "${FQDN}"
+	$SMTPPassword = Get-IniParameter "SMTPPassword" "${FQDN}" -doNotSubstitute
 }
 
 if (-not $NoSMTPOverSSL.IsPresent) {
@@ -587,7 +595,7 @@ if ([string]::IsNullOrEmpty($emailSubject)) {
 }
 
 if ([string]::IsNullOrEmpty($preExecutionCommand)) {
-	$preExecutionCommand = Get-IniParameter "preExecutionCommand" "${FQDN}"
+	$preExecutionCommand = Get-IniParameter "preExecutionCommand" "${FQDN}" -doNotSubstitute
 }	
 
 if (![string]::IsNullOrEmpty($preExecutionCommand)) {
@@ -634,7 +642,7 @@ if ($preExecutionDelay -gt 0) {
 }
 
 if ([string]::IsNullOrEmpty($postExecutionCommand)) {
-	$postExecutionCommand = Get-IniParameter "postExecutionCommand" "${FQDN}"
+	$postExecutionCommand = Get-IniParameter "postExecutionCommand" "${FQDN}" -doNotSubstitute
 }
 
 $dateTime = get-date -f "yyyy-MM-dd HH-mm-ss"
