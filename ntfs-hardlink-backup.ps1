@@ -54,9 +54,10 @@
 	Switch on to only run the backup when the destination is a local disk or a server in the same subnet.
 	This is useful for scheduled network backups that should only run when the laptop is on the home office network.
 .PARAMETER localSubnetMask
-	The size of the IPv4 netmask (CIDR) that covers all the networks that should be considered local to the backup destination IPv4 address.
+	The IPv4 netmask that covers all the networks that should be considered local to the backup destination IPv4 address.
+	Format like 255.255.255.0 (24 bits set) 255.255.240.0 (20 bits set)  255.255.0.0 (16 bits set)
 	Use this in an office with multiple subnets that can all be covered (summarised) by a single netmask.
-	Without this parameter the default is to use the subnet mask of the local machine interface(s).
+	Without this parameter the default is to use the subnet mask of the local machine interface(s), if localSubnetOnly is on.
 .PARAMETER emailTo
 	Address to be notified about success and problems. If not given no Emails will be sent.
 .PARAMETER emailFrom
@@ -156,7 +157,7 @@ Param(
 	[Parameter(Mandatory=$False)]
 	[switch]$localSubnetOnly,
 	[Parameter(Mandatory=$False)]
-	[Int32]$localSubnetMask,
+	[string]$localSubnetMask,
 	[Parameter(Mandatory=$False)]
 	[string]$emailSubject="",
 	[Parameter(Mandatory=$False)]
@@ -570,11 +571,31 @@ if (-not $localSubnetOnly.IsPresent) {
 	$localSubnetOnly = Is-TrueString "${IniFileString}"
 }
 
-if ($localSubnetMask -eq 0) {
+if ([string]::IsNullOrEmpty($localSubnetMask)) {
 	$localSubnetMask = Get-IniParameter "localSubnetMask" "${FQDN}"
-	if ($localSubnetMask -eq 0) {
-		# Looks dumb, but left here if you want to change the default from zero.
-		$localSubnetMask = 0;
+}
+
+if (![string]::IsNullOrEmpty($localSubnetMask)) {
+	$validNetMaskNumbers = '0|128|192|224|240|248|252|254|255'
+	$netMaskRegexArray = @(
+		"(^($validNetMaskNumbers)\.0\.0\.0$)"
+		"(^255\.($validNetMaskNumbers)\.0\.0$)"
+		"(^255\.255\.($validNetMaskNumbers)\.0$)"
+		"(^255\.255\.255\.($validNetMaskNumbers)$)"
+	)
+	$netMaskRegex = [string]::Join('|', $netMaskRegexArray)
+	
+	if (!(($localSubnetMask -Match $netMaskRegex))) {
+		# The string is not a valid network mask.
+		# It should be something like 255.255.255.0
+		$output = "`nERROR: localSubnetMask $localSubnetMask is not valid`n"
+		echo $output
+		$emailBody = "$emailBody`r`n$output`r`n"
+
+		$tempLogContent += $output
+
+		$parameters_ok = $False
+		$localSubnetMask = ""
 	}
 }
 
@@ -772,7 +793,7 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 					if ($adapter.IPAddress[0]) {
 						[IPAddress]$IPv4Address = $adapter.IPAddress[0]
 						if ($adapter.IPSubnet[0]) {
-							if ($localSubnetMask -eq 0) {
+							if ([string]::IsNullOrEmpty($localSubnetMask)) {
 								[IPAddress]$mask = $adapter.IPSubnet[0]
 							} else {
 								[IPAddress]$mask = $localSubnetMask
