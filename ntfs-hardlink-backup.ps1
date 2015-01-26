@@ -908,7 +908,6 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			if (($backupSourceArray[0] -eq "") -and ($backupSourceArray[1] -eq "")) {
 				# The source is a UNC path (file share) which has no drive letter. We cannot do volume shadowing from that.
 				$backup_source_drive_letter = ""
-				$backup_source_path = ""
 			} else {
 				if (-not ($backup_source -match ":")) {
 					# No drive letter specified. This could be an attempt at a relative path, so first resolve it to the full path.
@@ -919,13 +918,11 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$backup_source_path =  split-path $backup_source -noQualifier
 			}
 			
+			$backup_source_folder = split-path $backup_source -leaf
+			
 			#check if we try to backup a complete drive
-			if (($backup_source_drive_letter -ne "") -and ($backup_source_path -eq "")) {
-				if ($backup_source_drive_letter -match "([A-Z]):") {
-					$backup_source_folder = "["+$matches[1]+"]"
-				}
-			} else {
-				$backup_source_folder =  split-path $backup_source -leaf
+			if ($backup_source_folder -match "([A-Z]):\\") {
+				$backup_source_folder = "["+$matches[1]+"]"
 			}
 			
 			$actualBackupDestination = "$selectedBackupDestination\$backup_source_folder"
