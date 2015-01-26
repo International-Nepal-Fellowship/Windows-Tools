@@ -33,7 +33,7 @@
 .PARAMETER timeTolerance
 	Sometimes useful to not have an exact timestamp comparison between source and dest, but kind of a fuzzy comparison, because the system time of NAS drives is not exactly synced with the host.
 	To overcome this we use the -timeTolerance switch to specify a value in milliseconds.
-.PARAMETER exclude
+.PARAMETER excludeFiles
 	Exclude files via wildcards. Can be a list separated by comma.
 .PARAMETER traditional
 	Some NAS boxes only support a very outdated version of the SMB protocol. SMB is used when network drives are connected. This old version of SMB in certain situations does not support the fast enumeration methods of ln.exe, which causes ln.exe to simply do nothing.
@@ -101,7 +101,7 @@
 	PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources "D:\backup_source1","C:\backup_source2" -backupDestination E:\backup_dest -emailTo "me@example.org" -emailFrom "backup@example.org" -SMTPServer example.org -SMTPUser "backup@example.org" -SMTPPassword "secr4et"
 	Backup with more than one source.
 .NOTES
-	Author: Artur Neumann, Phil Davis *INFN*
+	Author: Artur Neumann *INFN*, Phil Davis *INFN*, Nikita Feodonit
 	Version: 2.0.ALPHA.8
 #>
 
@@ -162,7 +162,7 @@ Param(
 	[Parameter(Mandatory=$False)]
 	[string]$emailJobName="",
 	[Parameter(Mandatory=$False)]
-	[String[]]$exclude,
+	[String[]]$excludeFiles,
 	[Parameter(Mandatory=$False)]
 	[string]$LogFile="",
 	[Parameter(Mandatory=$False)]
@@ -586,10 +586,10 @@ if ([string]::IsNullOrEmpty($emailJobName)) {
 	$emailJobName = Get-IniParameter "emailJobName" "${FQDN}"
 }
 
-if ([string]::IsNullOrEmpty($exclude)) {
-	$excludelist = Get-IniParameter "exclude" "${FQDN}"
-	if (-not [string]::IsNullOrEmpty($excludelist)) {
-		$exclude = $excludelist.split(",")
+if ([string]::IsNullOrEmpty($excludeFiles)) {
+	$excludeFilesList = Get-IniParameter "excludeFiles" "${FQDN}"
+	if (-not [string]::IsNullOrEmpty($excludeFilesList)) {
+		$excludeFiles = $excludeFilesList.split(",")
 	}
 }
 
@@ -1128,14 +1128,14 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$timeToleranceArgument = ""
 			}
 
-			$excludeString=" "
-			foreach ($item in $exclude) {
+			$excludeFilesString=" "
+			foreach ($item in $excludeFiles) {
 				if ($item -AND $item.Trim()) {
-					$excludeString = "$excludeString --exclude $item "
+					$excludeFilesString = "$excludeFilesString --exclude `"$item`" "
 				}
 			}
 
-			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeString $spliceArgument $backupModeACLsArgument"
+			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeFilesString $spliceArgument $backupModeACLsArgument"
 
 			if ($LogFile) {
 				$logFileCommandAppend = " >> `"$LogFile`""
