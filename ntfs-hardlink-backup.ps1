@@ -35,6 +35,8 @@
 	To overcome this we use the -timeTolerance switch to specify a value in milliseconds.
 .PARAMETER excludeFiles
 	Exclude files via wildcards. Can be a list separated by comma.
+.PARAMETER excludeDirs
+	Exclude directories via wildcards. Can be a list separated by comma.
 .PARAMETER traditional
 	Some NAS boxes only support a very outdated version of the SMB protocol. SMB is used when network drives are connected. This old version of SMB in certain situations does not support the fast enumeration methods of ln.exe, which causes ln.exe to simply do nothing.
 	To overcome this use the -traditional switch, which forces ln.exe to enumerate files the old, but a little slower way.
@@ -163,6 +165,8 @@ Param(
 	[string]$emailJobName="",
 	[Parameter(Mandatory=$False)]
 	[String[]]$excludeFiles,
+	[Parameter(Mandatory=$False)]
+	[String[]]$excludeDirs,
 	[Parameter(Mandatory=$False)]
 	[string]$LogFile="",
 	[Parameter(Mandatory=$False)]
@@ -593,6 +597,13 @@ if ([string]::IsNullOrEmpty($excludeFiles)) {
 	}
 }
 
+if ([string]::IsNullOrEmpty($excludeDirs)) {
+	$excludeDirsList = Get-IniParameter "excludeDirs" "${FQDN}"
+	if (-not [string]::IsNullOrEmpty($excludeDirsList)) {
+		$excludeDirs = $excludeDirsList.split(",")
+	}
+}
+
 if (-not $StepTiming.IsPresent) {
 	$IniFileString = Get-IniParameter "StepTiming" "${FQDN}"
 	$StepTiming = Is-TrueString "${IniFileString}"
@@ -869,6 +880,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 		if ($backup_source.substring($backup_source.length-1,1) -eq "\") {
 			$backup_source=$backup_source.Substring(0,$backup_source.Length-1)
 		}
+
 		if (test-path -LiteralPath $backup_source) {
 			$stepCounter = 1
 			$backupSourceArray = $backup_source.split("\")
@@ -1135,7 +1147,14 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				}
 			}
 
-			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeFilesString $spliceArgument $backupModeACLsArgument"
+			$excludeDirsString=" "
+			foreach ($item in $excludeDirs) {
+				if ($item -AND $item.Trim()) {
+					$excludeDirsString = "$excludeDirsString --excludedir `"$item`" "
+				}
+			}
+
+			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeFilesString $excludeDirsString $spliceArgument $backupModeACLsArgument"
 
 			if ($LogFile) {
 				$logFileCommandAppend = " >> `"$LogFile`""
