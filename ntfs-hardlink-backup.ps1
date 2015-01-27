@@ -702,11 +702,16 @@ if ([string]::IsNullOrEmpty($preExecutionCommand)) {
 }	
 
 if (![string]::IsNullOrEmpty($preExecutionCommand)) {
-	$output = "`nrunning preexecution command ($preExecutionCommand)`n"
-	echo $output
-	$tempLogContent += $output
+	$output = "`nrunning preexecution command ($preExecutionCommand)`n"	
+	$output += `cmd /c  `"$preExecutionCommand`" 2`>`&1`
 	
-	$output = `cmd /c  `"$preExecutionCommand`"`
+	#if the command fails we want a message in the Email, otherwise the details will be only shown in the log file
+	#make sure this if statement is directly after the cmd command
+	if(!$?) {
+		$output += "`n`nERROR: the pre-execution-command ended with an error" 
+		$emailBody = "$emailBody`r$output`r`n"
+		$error_during_backup = $True
+	}
 	
 	$output += "`n"
 	echo $output
