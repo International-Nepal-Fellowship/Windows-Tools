@@ -777,10 +777,12 @@ if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType lea
 		}
 	}
 }
+#try to run ln.exe just to check if it can start. Possible that the ln version does not fit the Windows version (e.g. 64bit installed on a 32bit system)
+$output=`cmd /c "$lnPath -h" 2`>`&1`
 
 #if we could not find ln.exe, there is no point in trying to make a backup
-if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf)  ) {
-	$output = "`nERROR: could not find ln.exe`n"
+if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf) -or ($LASTEXITCODE -ne 0) ) {
+	$output += "`nERROR: could not run ln.exe`n"
 	echo $output
 	$emailBody = "$emailBody`r`n$output`r`n"
 	
@@ -1290,8 +1292,8 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					"`r`nFull copy from $backup_source_path to $actualBackupDestination$backupMappedString" | Out-File "$LogFile"  -encoding ASCII -append
 				}
 
-				#echo "$lnPath $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
-				`cmd /c  "$lnPath $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
+				#echo "$lnPath $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"
+				`cmd /c  "$lnPath $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 "`
 			} else {
 				echo "Delorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $selectedBackupDestination\$lastBackupFolderName"
 				if ($LogFile) {
@@ -1299,7 +1301,11 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				}
 
 				#echo "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"
-				`cmd /c  "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"`
+				`cmd /c  "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 "`
+			}
+			
+			if ($LASTEXITCODE -ne 0) {
+				$error_during_backup = $true
 			}
 
 			$summary = ""
@@ -1308,6 +1314,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				foreach ( $line in $backup_response.length..1 ) {
 					$summary =  $backup_response[$line] + "`n" + $summary
 					
+					#do we need this line if we already checked for the exitcode?
 					if ($backup_response[$line] -match '(.*):\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s*([1-9]+\d*(?:\,\d*)?)') {
 						$error_during_backup = $true
 					}
