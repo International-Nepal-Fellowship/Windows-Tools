@@ -186,7 +186,7 @@ Param(
 )
 
 #The path and filename of the script it self
-$scriptPath = $myInvocation.MyCommand.Definition
+$script_path = Split-Path -parent $MyInvocation.MyCommand.Definition
 
 Function Get-IniContent
 {
@@ -436,7 +436,7 @@ Function Get-Version
 	#>
 	
 	#Get the help-text of my self
-	$helpText=Get-Help $scriptPath 
+	$helpText=Get-Help $script_path/ntfs-hardlink-backup.ps1 
 	
 	#Get-Help returns a PSObjects with other PSObjects inside
 	#So we are trying some black magic to get a string out of it and then to parse the version
@@ -754,7 +754,6 @@ if ([string]::IsNullOrEmpty($postExecutionCommand)) {
 }
 
 $dateTime = get-date -f "yyyy-MM-dd HH-mm-ss"
-$script_path = Split-Path -parent $MyInvocation.MyCommand.Definition
 
 if ([string]::IsNullOrEmpty($backupDestination)) {
 	# No backup destination on command line or in INI file
