@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	NTFS-HARDLINK-BACKUP Version: 2.0.ALPHA.9
+	NTFS-HARDLINK-BACKUP Version: 2.0.ALPHA.10
 	
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
@@ -60,6 +60,7 @@
 .PARAMETER localSubnetMask
 	The IPv4 netmask that covers all the networks that should be considered local to the backup destination IPv4 address.
 	Format like 255.255.255.0 (24 bits set) 255.255.240.0 (20 bits set)  255.255.0.0 (16 bits set)
+	Or specify a CIDR prefix size (0 to 32)
 	Use this in an office with multiple subnets that can all be covered (summarised) by a single netmask.
 	Without this parameter the default is to use the subnet mask of the local machine interface(s), if localSubnetOnly is on.
 .PARAMETER emailTo
@@ -644,6 +645,33 @@ if ([string]::IsNullOrEmpty($localSubnetMask)) {
 }
 
 if (![string]::IsNullOrEmpty($localSubnetMask)) {
+	$CIDRbitCount = 0
+	# Check if we have an integer
+	if ([int]::TryParse($localSubnetMask, [ref]$CIDRbitCount)) {
+		# That is also in the range 0 to 32
+		if (($CIDRbitCount -ge 0) -and ($CIDRbitCount -le 32)) {
+			# And turn it into a 255.255.255.0 style string
+			$CIDRremainder = $CIDRbitCount % 8
+			$CIDReights = [Math]::Floor($CIDRbitCount / 8)
+			switch ($CIDRremainder) {
+				0 { $CIDRbitText = "0" }
+				1 { $CIDRbitText = "128" }
+				2 { $CIDRbitText = "192" }
+				3 { $CIDRbitText = "224" }
+				4 { $CIDRbitText = "240" }
+				5 { $CIDRbitText = "248" }
+				6 { $CIDRbitText = "252" }
+				7 { $CIDRbitText = "254" }
+			}
+			switch ($CIDReights) {
+				0 { $localSubnetMask = $CIDRbitText + ".0.0.0" }
+				1 { $localSubnetMask = "255." + $CIDRbitText + ".0.0" }
+				2 { $localSubnetMask = "255.255." + $CIDRbitText + ".0" }
+				3 { $localSubnetMask = "255.255.255." + $CIDRbitText }
+				4 { $localSubnetMask = "255.255.255.255" }
+			}
+		}
+	}
 	$validNetMaskNumbers = '0|128|192|224|240|248|252|254|255'
 	$netMaskRegexArray = @(
 		"(^($validNetMaskNumbers)\.0\.0\.0$)"
