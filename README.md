@@ -15,10 +15,8 @@ FEATURES
 * optionally read parameters from an INI file
 * keep historical log files
 * Keeping min old backups per year 
-* Keeping min old backups per per month (TODO)
-* try to run ln.exe from path (TODO)
-* option to choose where ln.exe lives (TODO)
-* multiple Email receptient (TODO)
+* try to run ln.exe from path
+* option to choose where ln.exe lives
 
 
 INSTALLATION
