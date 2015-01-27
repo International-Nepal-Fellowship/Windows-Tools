@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	NTFS-HARDLINK-BACKUP Version: 2.0.ALPHA.8
+	NTFS-HARDLINK-BACKUP Version: 2.0.ALPHA.9
 	
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
@@ -99,6 +99,8 @@
 	Time in milliseconds to pause between running the preExecutionCommand and the start of the backup. Default = 0
 .PARAMETER postExecutionCommand
 	Command to run after the backup is done.
+.PARAMETER lnPath
+	The full path to the ln executable. e.g. c:\Tools\Backup\ln.exe
 .PARAMETER version
 	print the version information and exit.	
 .EXAMPLE
@@ -181,6 +183,8 @@ Param(
 	[Int32]$preExecutionDelay,
 	[Parameter(Mandatory=$False)]
 	[string]$postExecutionCommand="",
+	[Parameter(Mandatory=$False)]
+	[string]$lnPath="",
 	[Parameter(Mandatory=$False)]
 	[switch]$version=$False
 )
@@ -753,6 +757,38 @@ if ([string]::IsNullOrEmpty($postExecutionCommand)) {
 	$postExecutionCommand = Get-IniParameter "postExecutionCommand" "${FQDN}" -doNotSubstitute
 }
 
+if ([string]::IsNullOrEmpty($lnPath)) {
+	$lnPath = Get-IniParameter "lnPath" "${FQDN}"
+}
+
+#if lnPath is not given in the ini file nor on the command line or its not there try to find it somewhere else
+if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf)  ) {
+	if (Test-Path -Path "$script_path\ln.exe" -PathType leaf) {
+		$lnPath="$script_path\ln.exe"
+	} elseif (Test-Path -Path "$script_path\..\ln.exe" -PathType leaf) {
+		$lnPath="$script_path\..\ln.exe"
+	} else {
+		#last chance, somewhere in the PATH Environment variable
+		foreach ($ENVpath in $env:path.split(";")) {	
+			if (Test-Path -Path "$ENVpath\ln.exe" -PathType leaf) {
+				$lnPath="$ENVpath\ln.exe"
+				break;
+			}
+		}
+	}
+}
+
+#if we could not find ln.exe, there is no point in trying to make a backup
+if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf)  ) {
+	$output = "`nERROR: could not find ln.exe`n"
+	echo $output
+	$emailBody = "$emailBody`r`n$output`r`n"
+	
+	$tempLogContent += $output
+	
+	$parameters_ok = $False
+}
+
 $dateTime = get-date -f "yyyy-MM-dd HH-mm-ss"
 
 if ([string]::IsNullOrEmpty($backupDestination)) {
@@ -1254,16 +1290,16 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					"`r`nFull copy from $backup_source_path to $actualBackupDestination$backupMappedString" | Out-File "$LogFile"  -encoding ASCII -append
 				}
 
-				#echo "$script_path\..\ln.exe $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
-				`cmd /c  "$script_path\..\ln.exe $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
+				#echo "$lnPath $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
+				`cmd /c  "$lnPath $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"`
 			} else {
 				echo "Delorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $selectedBackupDestination\$lastBackupFolderName"
 				if ($LogFile) {
 					"`r`nDelorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $selectedBackupDestination\$lastBackupFolderName" | Out-File "$LogFile"  -encoding ASCII -append
 				}
 
-				#echo "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"
-				`cmd /c  "$script_path\..\ln.exe $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"`
+				#echo "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"
+				`cmd /c  "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"`
 			}
 
 			$summary = ""
@@ -1323,7 +1359,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					}
 					$backupsDeleted++
 
-					`cmd /c  "$script_path\..\ln.exe --deeppathdelete `"$folderToDelete`" $logFileCommandAppend"`
+					`cmd /c  "$lnPath --deeppathdelete `"$folderToDelete`" $logFileCommandAppend"`
 				}
 
 				$summary = "`nDeleted $backupsDeleted old backup(s)`n"
