@@ -468,11 +468,16 @@ $FQDN = [System.Net.DNS]::GetHostByName('').HostName
 $userName = [Environment]::UserName
 $tempLogContent = ""
 
+$versionString=Get-Version
 
 if ($version) {
-	$versionString=Get-Version
 	echo $versionString
 	exit
+} else {
+	$output = "NTFS-HARDLINK-BACKUP $versionString`r`n"
+	$emailBody = "$emailBody`r`n$output`r`n"
+	$tempLogContent += $output
+	echo $output
 }
 
 if ($iniFile) {
