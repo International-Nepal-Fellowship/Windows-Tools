@@ -1,5 +1,7 @@
 <#
 .DESCRIPTION
+	NTFS-HARDLINK-BACKUP Version: 2.0.ALPHA.8
+	
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
 	INSTALLATION:
@@ -97,6 +99,8 @@
 	Time in milliseconds to pause between running the preExecutionCommand and the start of the backup. Default = 0
 .PARAMETER postExecutionCommand
 	Command to run after the backup is done.
+.PARAMETER version
+	print the version information and exit.	
 .EXAMPLE
 	PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources D:\backup_source1 -backupDestination E:\backup_dest -emailTo "me@example.org" -emailFrom "backup@example.org" -SMTPServer example.org -SMTPUser "backup@example.org" -SMTPPassword "secr4et"
 	Simple backup.
@@ -105,7 +109,6 @@
 	Backup with more than one source.
 .NOTES
 	Author: Artur Neumann *INFN*, Phil Davis *INFN*, Nikita Feodonit
-	Version: 2.0.ALPHA.8
 #>
 
 [CmdletBinding()]
@@ -177,8 +180,13 @@ Param(
 	[Parameter(Mandatory=$False)]
 	[Int32]$preExecutionDelay,
 	[Parameter(Mandatory=$False)]
-	[string]$postExecutionCommand=""
+	[string]$postExecutionCommand="",
+	[Parameter(Mandatory=$False)]
+	[switch]$version=$False
 )
+
+#The path and filename of the script it self
+$scriptPath = $myInvocation.MyCommand.Definition
 
 Function Get-IniContent
 {
@@ -410,6 +418,46 @@ Function Is-TrueString
 	{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function ended"}
 }
 
+Function Get-Version
+{
+<#
+	.Synopsis
+		Gets the version of this script
+
+	.Description
+		Parses the description for a line that looks like:
+		NTFS-HARDLINK-BACKUP Version: 2.0.ALPHA.8
+		and gets the version information out of it
+		The version string must be in the .DESCRIPTION scope and must start with
+		"NTFS-HARDLINK-BACKUP Version: "
+
+	.Outputs
+		System.String
+	#>
+	
+	#Get the help-text of my self
+	$helpText=Get-Help $scriptPath 
+	
+	#Get-Help returns a PSObjects with other PSObjects inside
+	#So we are trying some black magic to get a string out of it and then to parse the version
+	
+	Foreach ($object in $helpText.psobject.properties) { 
+		#loop through all properties of the PSObject and find the description
+		if (($object.Value) -and  ($object.name -eq "description")) {
+			#the description is a object of the class System.Management.Automation.PSNoteProperty
+			#and inside of the properties of that are System.Management.Automation.PSPropertyInfo objects (in our case only one)
+			#still we loop though, just in case there are more that one and see if the value (what is finally a string), does match the version string
+			Foreach ($subObject in $object.Value[0].psobject.properties) { 	
+				 if ($subObject.Value -match "NTFS-HARDLINK-BACKUP Version: (.*)")	{
+						return $matches[1]
+				} 
+			} 
+		}
+	}
+}
+
+
+
 $emailBody = ""
 $error_during_backup = $false
 $doBackup = $true
@@ -424,6 +472,18 @@ $deleteOldLogFiles = $False
 $FQDN = [System.Net.DNS]::GetHostByName('').HostName
 $userName = [Environment]::UserName
 $tempLogContent = ""
+
+$versionString=Get-Version
+
+if ($version) {
+	echo $versionString
+	exit
+} else {
+	$output = "NTFS-HARDLINK-BACKUP $versionString`r`n"
+	$emailBody = "$emailBody`r`n$output`r`n"
+	$tempLogContent += $output
+	echo $output
+}
 
 if ($iniFile) {
 	if (Test-Path -Path $iniFile -PathType leaf) {
