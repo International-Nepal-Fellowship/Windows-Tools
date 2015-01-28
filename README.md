@@ -6,15 +6,18 @@ The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.h
 So all credit goes to [Hermann Schinagl](http://schinagl.priv.at)!
 FEATURES
 --------
+* NO GUI
+* easy to run a scheduled task
 * backup multiple sources to one destination
 * create Shadow Volume copy before making backup
 * send notification emails
-* takes extra options for ln (timetolerance, traditional, exclude)
+* takes extra options for ln (timetolerance, traditional, exclude, noads, ...)
 * creates ZIP file of the logfile before sending it by Email
 * delete old backups and log files
 * optionally read parameters from an INI file
+* flexibel way of using one INI file for a lot of computers
 * keep historical log files
-* Keeping min old backups per year 
+* can keep min. old backups per year 
 * try to run ln.exe from path
 * option to choose where ln.exe lives
 
