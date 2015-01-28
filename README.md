@@ -15,7 +15,7 @@ FEATURES
 * creates ZIP file of the logfile before sending it by Email
 * delete old backups and log files
 * optionally read parameters from an INI file
-* flexibel way of using one INI file for a lot of computers
+* flexible way of using one INI file for a lot of computers
 * keep historical log files
 * can keep min. old backups per year 
 * try to run ln.exe from path
