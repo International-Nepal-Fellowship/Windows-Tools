@@ -11,9 +11,9 @@
 	4. Navigate with Explorer to the .\bat folder
 	5. Right Click on the ntfs-hardlink-backup.ps1 file and select "Properties"
 	6. If you see in the bottom something like "Security: This file came from an other computer ..." Click on "Unblock"
-	7. start powershell from windows start menu (you need Windows 7 or Win Server for that, on XP you would need to install PowerShell 2 first)
-	8. allow local non-signed scripts to run by typing "Set-ExecutionPolicy RemoteSigned"
-	9. run ntfs-hardlink-backup.ps1 with full path
+	7. Start powershell from windows start menu (you need Windows 7 or Win Server for that, on XP you would need to install PowerShell 2 first)
+	8. Allow local non-signed scripts to run by typing "Set-ExecutionPolicy RemoteSigned"
+	9. Run ntfs-hardlink-backup.ps1 with full path
 .SYNOPSIS
 	c:\full\path\bat\ntfs-hardlink-backup.ps1 <Options>
 .PARAMETER iniFile
@@ -74,7 +74,7 @@
 .PARAMETER SMTPPassword
 	Password if the SMTP Server needs authentication.
 .PARAMETER SMTPTimeout
-	Timeout in ms for the Email to be send. Default 60000.
+	Timeout in ms for the Email to be sent. Default 60000.
 .PARAMETER NoSMTPOverSSL
 	Switch off the use of SSL to send Emails.
 .PARAMETER NoShadowCopy
@@ -86,7 +86,7 @@
 .PARAMETER emailSubject
 	Subject for the notification Email. This overrides the auto-generated email subject and emailJobName.
 .PARAMETER emailSendRetries
-	How often should we try to resend the Email. Default = 100
+	How many times should we try to resend the Email. Default = 100
 .PARAMETER msToPauseBetweenEmailSendRetries
 	Time in ms to wait between the resending of the Email. Default = 60000
 .PARAMETER LogFile
