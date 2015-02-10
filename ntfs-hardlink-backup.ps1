@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	NTFS-HARDLINK-BACKUP Version: 2.0.BETA.1
+	NTFS-HARDLINK-BACKUP Version: 2.0.BETA.2
 	
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
@@ -1335,8 +1335,14 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				`cmd /c  "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 "`
 			}
 			
-			if ($LASTEXITCODE -ne 0) {
+			$saved_lastexitcode = $LASTEXITCODE
+			if ($saved_lastexitcode -ne 0) {
+				$output = "`n`nERROR: the ln command ended with exit code [$saved_lastexitcode]" 
 				$error_during_backup = $true
+				$ln_error = $true
+			} else {
+				$output = ""
+				$ln_error = $false
 			}
 
 			$summary = ""
@@ -1363,6 +1369,15 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			$emailBody = $emailBody + $summary
 
 			echo "`n"
+
+			if ($ln_error)
+			{
+				$emailBody = "$emailBody`r$output`r`n"
+				echo $output
+				if ($LogFile) {
+					$output | Out-File "$LogFile" -encoding ASCII -append
+				}
+			}
 
 			if ($StepTiming -eq $True) {
 				$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
