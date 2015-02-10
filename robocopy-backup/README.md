@@ -28,4 +28,4 @@ INSTALLATION
 5. start powershell from windows start menu (you need Windows 7 or Win Server for that, on XP you would need to install PowerShell 2 first)
 6. allow local non-signed scripts to run by typing “Set-ExecutionPolicy RemoteSigned“
 7. make a batch file and INI file similar to the examples here, as needed
-9. run the batch file interactively, or add a tash to Task Scheduler to run as required
+9. run the batch file interactively, or add a task to Task Scheduler to run as required
