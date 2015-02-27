@@ -859,9 +859,6 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 					$emailBody = "$emailBody`r`n$output`r`n"
 					
 					$tempLogContent += $output
-					
-					# Flag that there is a problem, but let following code process and report any other problems before bailing out.
-					#$parameters_ok = $False						
 				}
 				
 			} else {
