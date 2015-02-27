@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	NTFS-HARDLINK-BACKUP Version: 2.0.BETA.2
+	NTFS-HARDLINK-BACKUP Version: 2.0.BETA.3
 	
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
@@ -846,9 +846,24 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 				# Delete any previous or externally-defined subst-ed drive on this letter.
 				# Send the output to null, as usually the first attempted delete will give an error, and we do not care.
 				subst "$substDrive" /d | Out-Null
-				subst "$substDrive" $possibleBackupDestination
-
-				$possibleBackupDestination = $substDrive
+				try {
+					if (!(Test-Path -Path $possibleBackupDestination)) {
+						New-Item $possibleBackupDestination -type directory -ea stop | Out-Null
+					}
+					subst "$substDrive" $possibleBackupDestination
+					$possibleBackupDestination = $substDrive					
+				}
+				catch {
+					$output = "`nERROR: Destination was not found and could not be created. $_`n"
+					echo $output
+					$emailBody = "$emailBody`r`n$output`r`n"
+					
+					$tempLogContent += $output
+					
+					# Flag that there is a problem, but let following code process and report any other problems before bailing out.
+					#$parameters_ok = $False						
+				}
+				
 			} else {
 				$output = "`nERROR: subst parameter $subst is invalid`n"
 				echo $output
@@ -1655,6 +1670,7 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 if (-not ([string]::IsNullOrEmpty($substDrive))) {
 	# Delete any drive letter substitution done earlier
 	# Note: the subst drive might have contained the log file, so we cannot delete earlier since it is needed to zip and email.
+	echo "`nremoving subst of $substDrive`n"
 	subst "$substDrive" /D
 }
 
