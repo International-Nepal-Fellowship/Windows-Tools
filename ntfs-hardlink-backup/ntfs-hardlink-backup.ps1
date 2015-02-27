@@ -477,6 +477,7 @@ $deleteOldLogFiles = $False
 $FQDN = [System.Net.DNS]::GetHostByName('').HostName
 $userName = [Environment]::UserName
 $tempLogContent = ""
+$substDone = $False
 
 $versionString=Get-Version
 
@@ -845,6 +846,7 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 				$substDrive = $subst.Substring(0,1) + ":"
 				# Delete any previous or externally-defined subst-ed drive on this letter.
 				# Send the output to null, as usually the first attempted delete will give an error, and we do not care.
+				$substDone = $False
 				subst "$substDrive" /d | Out-Null
 				try {
 					if (!(Test-Path -Path $possibleBackupDestination)) {
@@ -852,6 +854,7 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 					}
 					subst "$substDrive" $possibleBackupDestination
 					$possibleBackupDestination = $substDrive					
+					$substDone = $True
 				}
 				catch {
 					$output = "`nERROR: Destination was not found and could not be created. $_`n"
@@ -1664,10 +1667,10 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	echo "done"
 }
 
-if (-not ([string]::IsNullOrEmpty($substDrive))) {
+if ($substDone) {
 	# Delete any drive letter substitution done earlier
 	# Note: the subst drive might have contained the log file, so we cannot delete earlier since it is needed to zip and email.
-	echo "`nremoving subst of $substDrive`n"
+	echo "`nRemoving subst of $substDrive`n"
 	subst "$substDrive" /D
 }
 
