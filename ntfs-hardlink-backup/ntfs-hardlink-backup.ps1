@@ -51,6 +51,10 @@
 .PARAMETER splice
 	Splice reconnects Outer Junctions/Symlink directories in the destination to their original targets.
 	see http://schinagl.priv.at/nt/ln/ln.html#splice
+.PARAMETER unroll
+	Unroll follows Outer Junctions/Symlink Directories and rebuilds the content of Outer Junctions/Symlink Directories inside the hierarchy at the destination location.
+	Unroll also applies to Outer Symlink Files, which means, that unroll causes the target of Outer Symlink Files to be copied to the destination location.
+	see http://schinagl.priv.at/nt/ln/ln.html#unroll
 .PARAMETER backupModeACLs
 	Using the Backup Mode ACLs aka Access Control Lists, which contain the security for Files, Folders, Junctions or SymbolicLinks, and Encrypted Files are also copied.
 	see http://schinagl.priv.at/nt/ln/ln.html#backup
@@ -160,6 +164,8 @@ Param(
 	[switch]$noea,
 	[Parameter(Mandatory=$False)]
 	[switch]$splice,
+	[Parameter(Mandatory=$False)]
+	[switch]$unroll,
 	[Parameter(Mandatory=$False)]
 	[switch]$backupModeACLs,
 	[Parameter(Mandatory=$False)]
@@ -629,6 +635,11 @@ if (-not $noea.IsPresent) {
 if (-not $splice.IsPresent) {
 	$IniFileString = Get-IniParameter "splice" "${FQDN}"
 	$splice = Is-TrueString "${IniFileString}"
+}
+
+if (-not $unroll.IsPresent) {
+	$IniFileString = Get-IniParameter "unroll" "${FQDN}"
+	$unroll = Is-TrueString "${IniFileString}"
 }
 
 if (-not $backupModeACLs.IsPresent) {
@@ -1298,6 +1309,12 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$spliceArgument = ""
 			}			
 			
+			if ($unroll -eq $True) {
+				$unrollArgument = " --unroll "
+			} else {
+				$unrollArgument = ""
+			}			
+			
 			if ($backupModeACLs -eq $True) {
 				$backupModeACLsArgument = " --backup "
 			} else {
@@ -1324,7 +1341,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				}
 			}
 
-			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeFilesString $excludeDirsString $spliceArgument $backupModeACLsArgument"
+			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeFilesString $excludeDirsString $spliceArgument  $unrollArgument $backupModeACLsArgument"
 
 			if ($LogFile) {
 				$logFileCommandAppend = " >> `"$LogFile`""
