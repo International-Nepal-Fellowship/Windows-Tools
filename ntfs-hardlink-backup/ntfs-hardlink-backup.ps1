@@ -807,7 +807,7 @@ if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType lea
 	}
 }
 #try to run ln.exe just to check if it can start. Possible that the ln version does not fit the Windows version (e.g. 64bit installed on a 32bit system)
-$output=`cmd /c "$lnPath -h" 2`>`&1`
+$output=`cmd /c "`"$lnPath`"  -h" 2`>`&1`
 
 #if we could not find ln.exe, there is no point in trying to make a backup
 if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf) -or ($LASTEXITCODE -ne 0) ) {
@@ -1339,7 +1339,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				}
 
 				#echo "$lnPath $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"
-				`cmd /c  "$lnPath $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 "`
+				`cmd /c  "`"`"$lnPath`" $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 `""`
 			} else {
 				echo "Delorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $selectedBackupDestination\$lastBackupFolderName"
 				if ($LogFile) {
@@ -1347,7 +1347,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				}
 
 				#echo "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"
-				`cmd /c  "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 "`
+				`cmd /c  "`"`"$lnPath`" $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 `""`
 			}
 			
 			$saved_lastexitcode = $LASTEXITCODE
@@ -1427,7 +1427,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					}
 					$backupsDeleted++
 
-					`cmd /c  "$lnPath --deeppathdelete `"$folderToDelete`" $logFileCommandAppend"`
+					`cmd /c  "`"`"$lnPath`"  --deeppathdelete `"$folderToDelete`" $logFileCommandAppend`""`
 				}
 
 				$summary = "`nDeleted $backupsDeleted old backup(s)`n"
