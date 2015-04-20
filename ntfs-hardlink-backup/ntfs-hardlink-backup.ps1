@@ -51,6 +51,10 @@
 .PARAMETER splice
 	Splice reconnects Outer Junctions/Symlink directories in the destination to their original targets.
 	see http://schinagl.priv.at/nt/ln/ln.html#splice
+.PARAMETER unroll
+	Unroll follows Outer Junctions/Symlink Directories and rebuilds the content of Outer Junctions/Symlink Directories inside the hierarchy at the destination location.
+	Unroll also applies to Outer Symlink Files, which means, that unroll causes the target of Outer Symlink Files to be copied to the destination location.
+	see http://schinagl.priv.at/nt/ln/ln.html#unroll
 .PARAMETER backupModeACLs
 	Using the Backup Mode ACLs aka Access Control Lists, which contain the security for Files, Folders, Junctions or SymbolicLinks, and Encrypted Files are also copied.
 	see http://schinagl.priv.at/nt/ln/ln.html#backup
@@ -160,6 +164,8 @@ Param(
 	[switch]$noea,
 	[Parameter(Mandatory=$False)]
 	[switch]$splice,
+	[Parameter(Mandatory=$False)]
+	[switch]$unroll,
 	[Parameter(Mandatory=$False)]
 	[switch]$backupModeACLs,
 	[Parameter(Mandatory=$False)]
@@ -631,6 +637,11 @@ if (-not $splice.IsPresent) {
 	$splice = Is-TrueString "${IniFileString}"
 }
 
+if (-not $unroll.IsPresent) {
+	$IniFileString = Get-IniParameter "unroll" "${FQDN}"
+	$unroll = Is-TrueString "${IniFileString}"
+}
+
 if (-not $backupModeACLs.IsPresent) {
 	$IniFileString = Get-IniParameter "backupModeACLs" "${FQDN}"
 	$backupModeACLs = Is-TrueString "${IniFileString}"
@@ -807,7 +818,7 @@ if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType lea
 	}
 }
 #try to run ln.exe just to check if it can start. Possible that the ln version does not fit the Windows version (e.g. 64bit installed on a 32bit system)
-$output=`cmd /c "$lnPath -h" 2`>`&1`
+$output=`cmd /c "`"$lnPath`"  -h" 2`>`&1`
 
 #if we could not find ln.exe, there is no point in trying to make a backup
 if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf) -or ($LASTEXITCODE -ne 0) ) {
@@ -1298,6 +1309,12 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$spliceArgument = ""
 			}			
 			
+			if ($unroll -eq $True) {
+				$unrollArgument = " --unroll "
+			} else {
+				$unrollArgument = ""
+			}			
+			
 			if ($backupModeACLs -eq $True) {
 				$backupModeACLsArgument = " --backup "
 			} else {
@@ -1324,7 +1341,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				}
 			}
 
-			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeFilesString $excludeDirsString $spliceArgument $backupModeACLsArgument"
+			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeFilesString $excludeDirsString $spliceArgument  $unrollArgument $backupModeACLsArgument"
 
 			if ($LogFile) {
 				$logFileCommandAppend = " >> `"$LogFile`""
@@ -1339,7 +1356,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				}
 
 				#echo "$lnPath $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"
-				`cmd /c  "$lnPath $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 "`
+				`cmd /c  "`"`"$lnPath`" $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 `""`
 			} else {
 				echo "Delorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $selectedBackupDestination\$lastBackupFolderName"
 				if ($LogFile) {
@@ -1347,7 +1364,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				}
 
 				#echo "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"
-				`cmd /c  "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 "`
+				`cmd /c  "`"`"$lnPath`" $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 `""`
 			}
 			
 			$saved_lastexitcode = $LASTEXITCODE
@@ -1427,7 +1444,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					}
 					$backupsDeleted++
 
-					`cmd /c  "$lnPath --deeppathdelete `"$folderToDelete`" $logFileCommandAppend"`
+					`cmd /c  "`"`"$lnPath`"  --deeppathdelete `"$folderToDelete`" $logFileCommandAppend`""`
 				}
 
 				$summary = "`nDeleted $backupsDeleted old backup(s)`n"
