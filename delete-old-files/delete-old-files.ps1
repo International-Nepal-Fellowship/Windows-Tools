@@ -31,8 +31,6 @@ Exclude directories via wildcards. Can be a list separated by comma.
 .PARAMETER LogFile
 Path and filename for the logfile. If just a path is given, then "yyyy-mm-dd hh-mm-ss.log" is written to that folder.
 Default is to write "yyyy-mm-dd hh-mm-ss.log" in the delete-old-files script folder.
-.PARAMETER StepTiming
-Switch on display of the time at each step of the job.
 .PARAMETER version
 print the version information and exit.
 .EXAMPLE
@@ -57,8 +55,6 @@ Param(
 [Int32]$extraFolderAge,
 [Parameter(Mandatory=$False)]
 [string]$LogFile="",
-[Parameter(Mandatory=$False)]
-[switch]$StepTiming=$False,
 [Parameter(Mandatory=$False)]
 [switch]$version=$False,
 [Parameter(Mandatory=$False)]
@@ -386,11 +382,6 @@ if ([string]::IsNullOrEmpty($excludeDirs)) {
 	if (-not [string]::IsNullOrEmpty($excludeDirsList)) {
 		$excludeDirs = $excludeDirsList.split(",")
 	}
-}
-
-if (-not $StepTiming.IsPresent) {
-	$IniFileString = Get-IniParameter "StepTiming" "${FQDN}"
-	$StepTiming = Is-TrueString "${IniFileString}"
 }
 
 if ($fileAge -eq 0) {
