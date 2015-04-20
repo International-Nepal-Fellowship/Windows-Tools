@@ -419,15 +419,9 @@ if ([string]::IsNullOrEmpty($LogFile)) {
 $dateTime = get-date -f "yyyy-MM-dd HH-mm-ss"
 
 if ([string]::IsNullOrEmpty($LogFile)) {
-	# No log file specified from command line - put one in the backup destination with date-time stamp.
+	# No log file specified from command line - put one in the script path destination with date-time stamp.
 	$logFileDestination = $script_path
-	if ($logFileDestination) {
-		$LogFile = "$logFileDestination\$dateTime.log"
-	} else {
-		# This can happen if both the logfile and backup destination parameters were not in the INI file and not on the command line.
-		# In this case no log file is made. But we do proceed anyway.
-		$LogFile = ""
-	}
+	$LogFile = "$logFileDestination\$dateTime.log"
 } else {
 	if (Test-Path -Path $LogFile -pathType container) {
 		# The log file parameter points to a folder, so generate log file names in that folder.
