@@ -30,15 +30,13 @@ Exclude files via wildcards. Can be a list separated by comma.
 Exclude directories via wildcards. Can be a list separated by comma.
 .PARAMETER LogFile
 Path and filename for the logfile. If just a path is given, then "yyyy-mm-dd hh-mm-ss.log" is written to that folder.
-Default is to write "yyyy-mm-dd hh-mm-ss.log" in the backup destination folder.
+Default is to write "yyyy-mm-dd hh-mm-ss.log" in the delete-old-files script folder.
 .PARAMETER StepTiming
 Switch on display of the time at each step of the job.
 .PARAMETER version
 print the version information and exit.
 .EXAMPLE
-PS D:\> d:\tools\ntfs-hardlink-backup.ps1 -backupSources D:\backup_source1 -backupDestination E:\backup_dest -emailTo "me@example.org" -emailFrom "backup@example.org" -SMTPServer example.org -SMTPUser "backup@example.org" -SMTPPassword "secr4et"
-Simple backup.
-.EXAMPLE
+PS D:\> #ToDo
 .NOTES
 Author: Artur Neumann *INFN*
 #>
