@@ -479,21 +479,23 @@ if ($parameters_ok -eq $True) {
 		$output | Out-File "$LogFile" -encoding ASCII -append
 	}
 	
-	foreach ($file in $filesToDelete) {
+	if ( $filesToDelete -ne $null ) { #Powershell < 3 does iterate also over $null http://serverfault.com/a/457760/282995
+		foreach ($file in $filesToDelete) {
+			
+			$output = $file.Path + " - " + $file.DateCreated.ToString("yyyy.MM.dd")
+			Write-Host $output
+			
+			if ($delete) {
+				Remove-Item -Force $file.Path
+			}
 		
-		$output = $file.Path + " - " + $file.DateCreated.ToString("yyyy.MM.dd")
-		Write-Host $output
+			if ($LogFile) {
+				$output | Out-File "$LogFile" -encoding ASCII -append
+			}
 		
-		if ($delete) {
-			Remove-Item -Force $file.Path
-		}
+		}	
+	}
 	
-		if ($LogFile) {
-			$output | Out-File "$LogFile" -encoding ASCII -append
-		}
-	
-	}	
-
 	if ($delete) {
 		$output = "`r`nDELETING FOLDERS:`r`n"
 	} else {
@@ -503,28 +505,30 @@ if ($parameters_ok -eq $True) {
 	if ($LogFile) {
 		$output | Out-File "$LogFile" -encoding ASCII -append
 	}
-	
-	foreach ($folder in $foldersToDelete) {
-		if ($delete) {
-			$subitems = Get-ChildItem -Recurse -Path $folder.Path
-				if($subitems -eq $null)	{
-                  Remove-Item $folder.Path
-				  $output = $folder.Path + " - " + $folder.DateLastModified.ToString("yyyy.MM.dd")
-				} else {
-					$output=""
-				}
-				$subitems = $null	
-		} else {
-			$output = $folder.Path + " - " + $folder.DateLastModified.ToString("yyyy.MM.dd")
-		}
-	
-		if ($output) {
-			Write-Host $output
-			if ($LogFile) {
-				$output | Out-File "$LogFile" -encoding ASCII -append
+
+	if ( $filesToDelete -ne $null ) {	#Powershell < 3 does iterate also over $null http://serverfault.com/a/457760/282995
+		foreach ($folder in $foldersToDelete) {
+			if ($delete) {
+				$subitems = Get-ChildItem -Recurse -Path $folder.Path
+					if($subitems -eq $null)	{
+					  Remove-Item $folder.Path
+					  $output = $folder.Path + " - " + $folder.DateLastModified.ToString("yyyy.MM.dd")
+					} else {
+						$output=""
+					}
+					$subitems = $null	
+			} else {
+				$output = $folder.Path + " - " + $folder.DateLastModified.ToString("yyyy.MM.dd")
 			}
+		
+			if ($output) {
+				Write-Host $output
+				if ($LogFile) {
+					$output | Out-File "$LogFile" -encoding ASCII -append
+				}
+			}
+		
 		}
-	
 	}
 } else {
 	echo "ERROR: nothing was done due to problems in the parameters`r`n"
