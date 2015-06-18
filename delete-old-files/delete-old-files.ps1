@@ -331,6 +331,23 @@ Function Get-Version
 	}
 }
 
+function Recurse($path) {
+ #stolen from: http://superuser.com/questions/528487/list-all-files-and-dirs-without-recursion-with-junctions/528499#528499
+  
+  $fc = new-object -com scripting.filesystemobject
+  $folder = $fc.getfolder($path)
+
+  foreach ($i in $folder.files) { $i }
+
+  foreach ($i in $folder.subfolders) {
+            
+    if ( (get-item $i.path).Attributes.ToString().Contains("ReparsePoint") -eq $false) {    
+		$i    
+        Recurse($i.path)
+    }
+  }
+}
+
 
 $FQDN = [System.Net.DNS]::GetHostByName('').HostName
 $tempLogContent = ""
@@ -443,13 +460,14 @@ if ($LogFile) {
 
 if ($parameters_ok -eq $True) {
 	$olderThanDate = (Get-Date).adddays(-$fileAge)
-
-	$filesToDelete=Get-ChildItem -Path  $location -Recurse -force | ? {$_.creationtime -lt $olderThanDate} | where {!$_.PsIsContainer}
-
-	$olderThanDate = (Get-Date).adddays(-($fileAge-$extraFolderAge))
-
-	$foldersToDelete=Get-ChildItem -Path  $location -Recurse -force | ? {$_.LastWriteTime -lt $olderThanDate} | where {$_.PsIsContainer} | Select-Object -Property FullName,LastWriteTime, @{Name="FullNameLength";Expression={($_.FullName.Length)}} | Sort-Object -Property FullNameLength -Descending 
+	$allFilesAndFolders=Recurse($location)
 	
+	$filesToDelete = $allFilesAndFolders | ? {$_.Attributes -ne 16 } | ? {$_.DateCreated -lt $olderThanDate}
+	
+	$olderThanDate = (Get-Date).adddays(-($fileAge+$extraFolderAge))
+	
+	#get only the folders (Attribute==16) and sort them by length to make sure subfolders are checked and deleted before the main folder
+	$foldersToDelete = $allFilesAndFolders | ? {$_.Attributes -eq 16 } | ? {$_.DateLastModified -lt $olderThanDate} | Select-Object -Property Path,DateLastModified, @{Name="PathLength";Expression={($_.Path.Length)}} | Sort-Object -Property PathLength -Descending
 	
 	if ($delete) {
 		$output = "DELETING FOLDERS:`r`n"
@@ -463,12 +481,12 @@ if ($parameters_ok -eq $True) {
 	
 	foreach ($file in $filesToDelete) {
 		if ($delete) {
-			Remove-Item -Force $file.FullName
+			Remove-Item -Force $file.Path
 		}
 	
-		Write-Host $file.FullName  " - "  $file.CreationTime
+		Write-Host $file.Path  " - "  $file.DateCreated
 		if ($LogFile) {
-			$file.FullName + " - " + $file.CreationTime | Out-File "$LogFile" -encoding ASCII -append
+			$file.Path + " - " + $file.DateCreated | Out-File "$LogFile" -encoding ASCII -append
 		}
 	
 	}	
@@ -485,16 +503,16 @@ if ($parameters_ok -eq $True) {
 	
 	foreach ($folder in $foldersToDelete) {
 		if ($delete) {
-			$subitems = Get-ChildItem -Recurse -Path $folder.FullName
+			$subitems = Get-ChildItem -Recurse -Path $folder.Path
 				if($subitems -eq $null)	{
-                  Remove-Item $folder.FullName
-				  $output = $folder.FullName + " - " + $folder.LastWriteTime
+                  Remove-Item $folder.Path
+				  $output = $folder.Path + " - " + $folder.DateLastModified
 				} else {
 					$output=""
 				}
 				$subitems = $null	
 		} else {
-			$output = $folder.FullName + " - " + $folder.LastWriteTime
+			$output = $folder.Path + " - " + $folder.DateLastModified
 		}
 	
 		if ($output) {
