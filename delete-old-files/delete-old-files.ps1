@@ -480,13 +480,16 @@ if ($parameters_ok -eq $True) {
 	}
 	
 	foreach ($file in $filesToDelete) {
+		
+		$output = $file.Path + " - " + $file.DateCreated.ToString("yyyy.MM.dd")
+		Write-Host $output
+		
 		if ($delete) {
 			Remove-Item -Force $file.Path
 		}
 	
-		Write-Host $file.Path  " - "  $file.DateCreated
 		if ($LogFile) {
-			$file.Path + " - " + $file.DateCreated | Out-File "$LogFile" -encoding ASCII -append
+			$output | Out-File "$LogFile" -encoding ASCII -append
 		}
 	
 	}	
@@ -496,7 +499,7 @@ if ($parameters_ok -eq $True) {
 	} else {
 		$output = "`r`nLIST FOLDERS:`r`n"
 	}
-	echo $output
+	Write-Host $output
 	if ($LogFile) {
 		$output | Out-File "$LogFile" -encoding ASCII -append
 	}
@@ -506,13 +509,13 @@ if ($parameters_ok -eq $True) {
 			$subitems = Get-ChildItem -Recurse -Path $folder.Path
 				if($subitems -eq $null)	{
                   Remove-Item $folder.Path
-				  $output = $folder.Path + " - " + $folder.DateLastModified
+				  $output = $folder.Path + " - " + $folder.DateLastModified.ToString("yyyy.MM.dd")
 				} else {
 					$output=""
 				}
 				$subitems = $null	
 		} else {
-			$output = $folder.Path + " - " + $folder.DateLastModified
+			$output = $folder.Path + " - " + $folder.DateLastModified.ToString("yyyy.MM.dd")
 		}
 	
 		if ($output) {
