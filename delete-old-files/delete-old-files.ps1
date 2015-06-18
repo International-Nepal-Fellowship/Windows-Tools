@@ -470,7 +470,7 @@ if ($parameters_ok -eq $True) {
 	$foldersToDelete = $allFilesAndFolders | ? {$_.Attributes -eq 16 } | ? {$_.DateLastModified -lt $olderThanDate} | Select-Object -Property Path,DateLastModified, @{Name="PathLength";Expression={($_.Path.Length)}} | Sort-Object -Property PathLength -Descending
 	
 	if ($delete) {
-		$output = "DELETING FOLDERS:`r`n"
+		$output = "DELETING FILES:`r`n"
 	} else {
 		$output = "LIST FILES:`r`n"
 	}
