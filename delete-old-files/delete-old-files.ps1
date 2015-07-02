@@ -201,7 +201,7 @@ Function Get-IniParameter
 		$ParameterValue = $Null
 
 		$FQDN=$FQDN.ToLower()
-		
+
 		#search first the "common" section for the parameter, this will have the lowest priority
 		#as the parameter can be overwritten by other sections
 		if ($global:iniFileContent.Contains("common")) {
@@ -210,11 +210,11 @@ Function Get-IniParameter
 			}
 		}
 
-		#search if there is a section that matches the FQDN 
+		#search if there is a section that matches the FQDN
 		#this is the second highest priority, as the parameter can still be overwritten by the
 		#section that meets exactly the FQDN
 		#If there is more than one section that matches the FQDN with the same parameter
-		#the section furthest down in the ini file will be used 
+		#the section furthest down in the ini file will be used
 		foreach ($IniSection in $($global:iniFileContent.keys)){
 			$EscapedIniSection=$IniSection -replace "([\-\[\]\{\}\(\)\+\?\.\,\\\^\$\|\#])",'\$1'
 			$EscapedIniSection=$IniSection -replace "\*",'.*'
@@ -233,28 +233,28 @@ Function Get-IniParameter
 				$ParameterValue = $global:iniFileContent[$FQDN][$ParameterName]
 			}
 		}
-			
+
 		#replace all <parameter> with the parameter values
 		if ($doNotSubstitute -eq $False) {
-			$substituteMatches=$ParameterValue | Select-String -AllMatches '<[^<]+?>' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Value			
-			
+			$substituteMatches=$ParameterValue | Select-String -AllMatches '<[^<]+?>' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Value
+
 			foreach ($match in $substituteMatches) {
-				if(![string]::IsNullOrEmpty($match)) {            
+				if (![string]::IsNullOrEmpty($match)) {
 					$match=$($match.Trim())
 					$cleanMatch=$match.Replace("<","").Replace(">","")
-					if ($(test-path env:$($cleanMatch))) {					
+					if ($(test-path env:$($cleanMatch))) {
 						$substituteValue=$(get-childitem -path env:$($cleanMatch)).Value
 						$ParameterValue =$ParameterValue.Replace($match,$substituteValue)
 					}
 				}
 			}
 		}
-		
+
 		Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing for IniSection: $FQDN and ParameterName: $ParameterName ParameterValue: $ParameterValue"
 		Return $ParameterValue
-    }
+	}
 
-    End
+	End
 	{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function ended"}
 }
 
@@ -272,7 +272,7 @@ Function Is-TrueString
 		{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function started"}
 
 	Process
-    {
+	{
 		Write-Verbose "$($MyInvocation.MyCommand.Name):: Processing for TruthString: $TruthString"
 
 		# Use ToLower to make comparisons case-insensitive
@@ -287,9 +287,9 @@ Function Is-TrueString
 
 		Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing for TruthString: $TruthString TruthValue: $TruthValue"
 		Return $TruthValue
-    }
+	}
 
-    End
+	End
 	{Write-Verbose "$($MyInvocation.MyCommand.Name):: Function ended"}
 }
 
@@ -309,43 +309,43 @@ Function Get-Version
 	.Outputs
 		System.String
 	#>
-	
+
 	#Get the help-text of my self
-	$helpText=Get-Help $script_path\delete-old-files.ps1 
-	
+	$helpText=Get-Help $script_path\delete-old-files.ps1
+
 	#Get-Help returns a PSObjects with other PSObjects inside
 	#So we are trying some black magic to get a string out of it and then to parse the version
-	
-	Foreach ($object in $helpText.psobject.properties) { 
+
+	Foreach ($object in $helpText.psobject.properties) {
 		#loop through all properties of the PSObject and find the description
 		if (($object.Value) -and  ($object.name -eq "description")) {
 			#the description is a object of the class System.Management.Automation.PSNoteProperty
 			#and inside of the properties of that are System.Management.Automation.PSPropertyInfo objects (in our case only one)
 			#still we loop though, just in case there are more that one and see if the value (what is finally a string), does match the version string
-			Foreach ($subObject in $object.Value[0].psobject.properties) { 	
+			Foreach ($subObject in $object.Value[0].psobject.properties) {
 				 if ($subObject.Value -match "DELETE-OLD-FILES Version: (.*)")	{
 						return $matches[1]
-				} 
-			} 
+				}
+			}
 		}
 	}
 }
 
 function Recurse($path) {
- #stolen from: http://superuser.com/questions/528487/list-all-files-and-dirs-without-recursion-with-junctions/528499#528499
-  
-  $fc = new-object -com scripting.filesystemobject
-  $folder = $fc.getfolder($path)
+	#stolen from: http://superuser.com/questions/528487/list-all-files-and-dirs-without-recursion-with-junctions/528499#528499
 
-  foreach ($i in $folder.files) { $i }
+	$fc = new-object -com scripting.filesystemobject
+	$folder = $fc.getfolder($path)
 
-  foreach ($i in $folder.subfolders) {
-            
-    if ( (get-item $i.path).Attributes.ToString().Contains("ReparsePoint") -eq $false) {    
-		$i    
-        Recurse($i.path)
-    }
-  }
+	foreach ($i in $folder.files) { $i }
+
+	foreach ($i in $folder.subfolders) {
+
+		if ( (get-item $i.path).Attributes.ToString().Contains("ReparsePoint") -eq $false) {
+			$i
+			Recurse($i.path)
+		}
+	}
 }
 
 
@@ -384,7 +384,7 @@ if ([string]::IsNullOrEmpty($location)) {
 	if ([string]::IsNullOrEmpty($location)) {
 		$output = "ERROR: no location was given cannot progress`r`n"
 		$parameters_ok = $False
-	}	
+	}
 }
 
 if ([string]::IsNullOrEmpty($excludeFiles)) {
@@ -453,7 +453,7 @@ catch
 	$error_during_process = $True
 }
 
-#write the logs from the time we hadn't a logfile into the file
+#write the logs from the time we hadn't a log file into the file
 if ($LogFile) {
 	$tempLogContent | Out-File "$LogFile"  -encoding ASCII -append
 }
@@ -461,14 +461,14 @@ if ($LogFile) {
 if ($parameters_ok -eq $True) {
 	$olderThanDate = (Get-Date).adddays(-$fileAge)
 	$allFilesAndFolders=Recurse($location)
-	
+
 	$filesToDelete = $allFilesAndFolders | ? {$_.Attributes -ne 16 } | ? {$_.DateCreated -lt $olderThanDate}
-	
+
 	$olderThanDate = (Get-Date).adddays(-($fileAge+$extraFolderAge))
-	
+
 	#get only the folders (Attribute==16) and sort them by length to make sure subfolders are checked and deleted before the main folder
 	$foldersToDelete = $allFilesAndFolders | ? {$_.Attributes -eq 16 } | ? {$_.DateLastModified -lt $olderThanDate} | Select-Object -Property Path,DateLastModified, @{Name="PathLength";Expression={($_.Path.Length)}} | Sort-Object -Property PathLength -Descending
-	
+
 	if ($delete) {
 		$output = "DELETING FILES:`r`n"
 	} else {
@@ -478,24 +478,24 @@ if ($parameters_ok -eq $True) {
 	if ($LogFile) {
 		$output | Out-File "$LogFile" -encoding ASCII -append
 	}
-	
+
 	if ( $filesToDelete -ne $null ) { #Powershell < 3 does iterate also over $null http://serverfault.com/a/457760/282995
 		foreach ($file in $filesToDelete) {
-			
+
 			$output = $file.Path + " - " + $file.DateCreated.ToString("yyyy.MM.dd")
 			Write-Host $output
-			
+
 			if ($delete) {
 				Remove-Item -Force $file.Path
 			}
-		
+
 			if ($LogFile) {
 				$output | Out-File "$LogFile" -encoding ASCII -append
 			}
-		
-		}	
+
+		}
 	}
-	
+
 	if ($delete) {
 		$output = "`r`nDELETING FOLDERS:`r`n"
 	} else {
@@ -510,24 +510,24 @@ if ($parameters_ok -eq $True) {
 		foreach ($folder in $foldersToDelete) {
 			if ($delete) {
 				$subitems = Get-ChildItem -Recurse -Path $folder.Path
-					if($subitems -eq $null)	{
+					if ($subitems -eq $null) {
 					  Remove-Item $folder.Path
 					  $output = $folder.Path + " - " + $folder.DateLastModified.ToString("yyyy.MM.dd")
 					} else {
 						$output=""
 					}
-					$subitems = $null	
+					$subitems = $null
 			} else {
 				$output = $folder.Path + " - " + $folder.DateLastModified.ToString("yyyy.MM.dd")
 			}
-		
+
 			if ($output) {
 				Write-Host $output
 				if ($LogFile) {
 					$output | Out-File "$LogFile" -encoding ASCII -append
 				}
 			}
-		
+
 		}
 	}
 } else {
