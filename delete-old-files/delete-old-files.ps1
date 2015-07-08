@@ -465,12 +465,12 @@ if ($parameters_ok -eq $True) {
 	#assuming everything that is not a Directory must be a File
 	#we need to use get-item again. using $_.Attributes only returns a magic number not a string
 	#need -force to get also hidden files
-	$filesToDelete = $allFilesAndFolders | ? {(get-item -force $_.path).Attributes.ToString().Contains("Directory") -eq $false} | ? {$_.DateCreated -lt $olderThanDate}
+	$filesToDelete = $allFilesAndFolders | ? {(get-item -force $_.path).Attributes -ne $null} | ? {(get-item -force $_.path).Attributes.ToString().Contains("Directory") -eq $false} | ? {$_.DateCreated -lt $olderThanDate}
 
 	$olderThanDate = (Get-Date).adddays(-($fileAge+$extraFolderAge))
 
 	#get only the folders (Attribute contains "Directory"") and sort them by length to make sure subfolders are checked and deleted before the main folder
-	$foldersToDelete = $allFilesAndFolders | ? {(get-item -force $_.path).Attributes.ToString().Contains("Directory")} | ? {$_.DateLastModified -lt $olderThanDate} | Select-Object -Property Path,DateLastModified, @{Name="PathLength";Expression={($_.Path.Length)}} | Sort-Object -Property PathLength -Descending
+	$foldersToDelete = $allFilesAndFolders | ? {(get-item -force $_.path).Attributes -ne $null} | ? {(get-item -force $_.path).Attributes.ToString().Contains("Directory")} | ? {$_.DateLastModified -lt $olderThanDate} | Select-Object -Property Path,DateLastModified, @{Name="PathLength";Expression={($_.Path.Length)}} | Sort-Object -Property PathLength -Descending
 
 	if ($delete) {
 		$output = "DELETING FILES:`r`n"
