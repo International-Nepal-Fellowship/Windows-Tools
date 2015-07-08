@@ -506,7 +506,7 @@ if ($parameters_ok -eq $True) {
 		$output | Out-File "$LogFile" -encoding ASCII -append
 	}
 
-	if ( $filesToDelete -ne $null ) {	#Powershell < 3 does iterate also over $null http://serverfault.com/a/457760/282995
+	if ( $foldersToDelete -ne $null ) {	#Powershell < 3 does iterate also over $null http://serverfault.com/a/457760/282995
 		foreach ($folder in $foldersToDelete) {
 			if ($delete) {
 				$subitems = Get-ChildItem -Recurse -Path $folder.Path
