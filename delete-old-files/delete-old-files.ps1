@@ -26,8 +26,10 @@ default = 7
 actually delete the files/folders.
 .PARAMETER excludeFiles
 Exclude files via wildcards. Can be a list separated by comma.
+NOT IMPLEMENTED YET
 .PARAMETER excludeDirs
 Exclude directories via wildcards. Can be a list separated by comma.
+NOT IMPLEMENTED YET
 .PARAMETER LogFile
 Path and filename for the logfile. If just a path is given, then "yyyy-mm-dd hh-mm-ss.log" is written to that folder.
 Default is to write "yyyy-mm-dd hh-mm-ss.log" in the delete-old-files script folder.
