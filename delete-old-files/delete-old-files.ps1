@@ -8,7 +8,7 @@
 
 <#
 .DESCRIPTION
-DELETE-OLD-FILES Version: 1.0.ALPHA.1
+DELETE-OLD-FILES Version: 1.0.ALPHA.2
 This software is used to find and list or delete files/folders that are older than a specified age
 .SYNOPSIS
 c:\full\path\delete-old-files.ps1 <Options>
