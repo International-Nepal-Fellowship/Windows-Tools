@@ -341,7 +341,7 @@ function Recurse($path) {
 
 	foreach ($i in $folder.subfolders) {
 
-		if ( (get-item $i.path).Attributes.ToString().Contains("ReparsePoint") -eq $false) {
+		if ( (get-item -force $i.path).Attributes.ToString().Contains("ReparsePoint") -eq $false) {
 			$i
 			Recurse($i.path)
 		}
