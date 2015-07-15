@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA1
+	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA2
 
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
@@ -1600,94 +1600,115 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 }
 
 if ($emailTo -AND $emailFrom -AND $SMTPServer) {
-	echo "============Sending Email============"
-	$stepCounter = 1
+	# Check if we can find any network adapter that has a default gateway
+	$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
+	$defaultGatewayExists = $false
 
-	if ($LogFile) {
-		if ($StepTiming -eq $True) {
-			$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
-		}
-		echo  "$stepCounter. $stepTime Zipping log file"
-		$stepCounter++
-		$zipFilePath = "$LogFile.zip"
-		$fileToZip = get-item $LogFile
-
-		try
-		{
-			New-Item $zipFilePath -type file -force -erroraction stop | Out-Null
-			if (-not (test-path $zipFilePath)) {
-			  set-content $zipFilePath ("PK" + [char]5 + [char]6 + ("$([char]0)" * 18))
-			}
-
-			$ZipFile = (new-object -com shell.application).NameSpace($zipFilePath)
-			$zipfile.CopyHere($fileToZip.fullname)
-
-			$timeSlept = 0
-			while ($zipfile.Items().Count -le 0 -AND $timeSlept -le $maxMsToSleepForZipCreation ) {
-				Start-sleep -milliseconds $msToWaitDuringZipCreation
-				$timeSlept = $timeSlept + $msToWaitDuringZipCreation
-			}
-			$attachment = New-Object System.Net.Mail.Attachment("$zipFilePath" )
-		}
-		catch {
-			$error_during_backup = $True
-			$output = "`r`nERROR: Could not create log ZIP file. Will try to attach the unzipped log file and hope it's not to big.`r`n$_`r`n"
-			$emailBody = "$emailBody`r`n$output`r`n"
-			echo $output
-			$output | Out-File "$LogFile"  -encoding ASCII -append
-			$attachment = New-Object System.Net.Mail.Attachment("$LogFile" )
+	foreach ($adapter in $localAdapters) {
+		if ($adapter.DefaultIPGateway) {
+			$defaultGatewayExists = $true
 		}
 	}
 
-	if ($error_during_backup) {
-		$EmailSubject = "ERROR - $EmailSubject"
-	}
-	$SMTPMessage = New-Object System.Net.Mail.MailMessage($emailFrom,$emailTo,$emailSubject,$emailBody)
+	if ($defaultGatewayExists) {
+		echo "============Sending Email============"
+		$stepCounter = 1
 
-	if ($LogFile) {
-		$SMTPMessage.Attachments.Add($attachment)
-	}
-	$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPServer, $SMTPPort)
-
-	$SMTPClient.Timeout = $SMTPTimeout
-	if ($NoSMTPOverSSL -eq $False) {
-		$SMTPClient.EnableSsl = $True
-	}
-
-	$SMTPClient.Credentials = New-Object System.Net.NetworkCredential($SMTPUser, $SMTPPassword);
-
-	$emailSendSucess = $False
-	if ($StepTiming -eq $True) {
-		$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
-	}
-	echo  "$stepCounter. $stepTime Sending email"
-	$stepCounter++
-	while ($emailSendRetries -gt 0 -AND !$emailSendSucess) {
-		try {
-			$emailSendRetries--
-			$SMTPClient.Send($SMTPMessage)
-			$emailSendSucess = $True
-		} catch {
+		if ($LogFile) {
 			if ($StepTiming -eq $True) {
 				$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
 			}
-			$output = "ERROR: $stepTime Could not send Email.`r`n$_`r`n"
-			echo $output
-			if ($LogFile) {
-				$output | Out-File "$LogFile" -encoding ASCII -append
+			echo  "$stepCounter. $stepTime Zipping log file"
+			$stepCounter++
+			$zipFilePath = "$LogFile.zip"
+			$fileToZip = get-item $LogFile
+
+			try
+			{
+				New-Item $zipFilePath -type file -force -erroraction stop | Out-Null
+				if (-not (test-path $zipFilePath)) {
+				  set-content $zipFilePath ("PK" + [char]5 + [char]6 + ("$([char]0)" * 18))
+				}
+
+				$ZipFile = (new-object -com shell.application).NameSpace($zipFilePath)
+				$zipfile.CopyHere($fileToZip.fullname)
+
+				$timeSlept = 0
+				while ($zipfile.Items().Count -le 0 -AND $timeSlept -le $maxMsToSleepForZipCreation ) {
+					Start-sleep -milliseconds $msToWaitDuringZipCreation
+					$timeSlept = $timeSlept + $msToWaitDuringZipCreation
+				}
+				$attachment = New-Object System.Net.Mail.Attachment("$zipFilePath" )
+			}
+			catch {
+				$error_during_backup = $True
+				$output = "`r`nERROR: Could not create log ZIP file. Will try to attach the unzipped log file and hope it's not to big.`r`n$_`r`n"
+				$emailBody = "$emailBody`r`n$output`r`n"
+				echo $output
+				$output | Out-File "$LogFile"  -encoding ASCII -append
+				$attachment = New-Object System.Net.Mail.Attachment("$LogFile" )
 			}
 		}
 
-		if (!$emailSendSucess) {
-			Start-sleep -milliseconds $msToPauseBetweenEmailSendRetries
+		if ($error_during_backup) {
+			$EmailSubject = "ERROR - $EmailSubject"
+		}
+		$SMTPMessage = New-Object System.Net.Mail.MailMessage($emailFrom,$emailTo,$emailSubject,$emailBody)
+
+		if ($LogFile) {
+			$SMTPMessage.Attachments.Add($attachment)
+		}
+		$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPServer, $SMTPPort)
+
+		$SMTPClient.Timeout = $SMTPTimeout
+		if ($NoSMTPOverSSL -eq $False) {
+			$SMTPClient.EnableSsl = $True
+		}
+
+		$SMTPClient.Credentials = New-Object System.Net.NetworkCredential($SMTPUser, $SMTPPassword);
+
+		$emailSendSucess = $False
+		if ($StepTiming -eq $True) {
+			$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+		}
+		echo  "$stepCounter. $stepTime Sending email"
+		$stepCounter++
+		while ($emailSendRetries -gt 0 -AND !$emailSendSucess) {
+			try {
+				$emailSendRetries--
+				$SMTPClient.Send($SMTPMessage)
+				$emailSendSucess = $True
+			} catch {
+				if ($StepTiming -eq $True) {
+					$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+				}
+				$output = "ERROR: $stepTime Could not send Email.`r`n$_`r`n"
+				echo $output
+				if ($LogFile) {
+					$output | Out-File "$LogFile" -encoding ASCII -append
+				}
+			}
+
+			if (!$emailSendSucess) {
+				Start-sleep -milliseconds $msToPauseBetweenEmailSendRetries
+			}
+		}
+
+		if ($LogFile) {
+			$attachment.Dispose()
+		}
+
+		echo "done"
+	} else {
+		if ($StepTiming -eq $True) {
+			$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
+		}
+		$output = "ERROR: $stepTime No valid network connection found. Could not send Email.`r`n"
+		echo $output
+		if ($LogFile) {
+			$output | Out-File "$LogFile" -encoding ASCII -append
 		}
 	}
-
-	if ($LogFile) {
-		$attachment.Dispose()
-	}
-
-	echo "done"
 }
 
 if ($substDone) {
