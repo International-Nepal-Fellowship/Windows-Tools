@@ -1,7 +1,7 @@
 <#
 .DESCRIPTION
-	NTFS-HARDLINK-BACKUP Version: 2.0
-	
+	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA1
+
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
 	INSTALLATION:
@@ -107,7 +107,7 @@
 .PARAMETER lnPath
 	The full path to the ln executable. e.g. c:\Tools\Backup\ln.exe
 .PARAMETER version
-	print the version information and exit.	
+	print the version information and exit.
 .EXAMPLE
 	PS D:\> d:\ln\bat\ntfs-hardlink-backup.ps1 -backupSources D:\backup_source1 -backupDestination E:\backup_dest -emailTo "me@example.org" -emailFrom "backup@example.org" -SMTPServer example.org -SMTPUser "backup@example.org" -SMTPPassword "secr4et"
 	Simple backup.
@@ -337,7 +337,7 @@ Function Get-IniParameter
 		$ParameterValue = $Null
 
 		$FQDN=$FQDN.ToLower()
-		
+
 		#search first the "common" section for the parameter, this will have the lowest priority
 		#as the parameter can be overwritten by other sections
 		if ($global:iniFileContent.Contains("common")) {
@@ -346,11 +346,11 @@ Function Get-IniParameter
 			}
 		}
 
-		#search if there is a section that matches the FQDN 
+		#search if there is a section that matches the FQDN
 		#this is the second highest priority, as the parameter can still be overwritten by the
 		#section that meets exactly the FQDN
 		#If there is more than one section that matches the FQDN with the same parameter
-		#the section furthest down in the ini file will be used 
+		#the section furthest down in the ini file will be used
 		foreach ($IniSection in $($global:iniFileContent.keys)){
 			$EscapedIniSection=$IniSection -replace "([\-\[\]\{\}\(\)\+\?\.\,\\\^\$\|\#])",'\$1'
 			$EscapedIniSection=$IniSection -replace "\*",'.*'
@@ -369,23 +369,23 @@ Function Get-IniParameter
 				$ParameterValue = $global:iniFileContent[$FQDN][$ParameterName]
 			}
 		}
-			
+
 		#replace all <parameter> with the parameter values
 		if ($doNotSubstitute -eq $False) {
-			$substituteMatches=$ParameterValue | Select-String -AllMatches '<[^<]+?>' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Value			
-			
+			$substituteMatches=$ParameterValue | Select-String -AllMatches '<[^<]+?>' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Value
+
 			foreach ($match in $substituteMatches) {
-				if(![string]::IsNullOrEmpty($match)) {            
+				if(![string]::IsNullOrEmpty($match)) {
 					$match=$($match.Trim())
 					$cleanMatch=$match.Replace("<","").Replace(">","")
-					if ($(test-path env:$($cleanMatch))) {					
+					if ($(test-path env:$($cleanMatch))) {
 						$substituteValue=$(get-childitem -path env:$($cleanMatch)).Value
 						$ParameterValue =$ParameterValue.Replace($match,$substituteValue)
 					}
 				}
 			}
 		}
-		
+
 		Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Processing for IniSection: $FQDN and ParameterName: $ParameterName ParameterValue: $ParameterValue"
 		Return $ParameterValue
     }
@@ -445,24 +445,24 @@ Function Get-Version
 	.Outputs
 		System.String
 	#>
-	
+
 	#Get the help-text of my self
-	$helpText=Get-Help $script_path/ntfs-hardlink-backup.ps1 
-	
+	$helpText=Get-Help $script_path/ntfs-hardlink-backup.ps1
+
 	#Get-Help returns a PSObjects with other PSObjects inside
 	#So we are trying some black magic to get a string out of it and then to parse the version
-	
-	Foreach ($object in $helpText.psobject.properties) { 
+
+	Foreach ($object in $helpText.psobject.properties) {
 		#loop through all properties of the PSObject and find the description
 		if (($object.Value) -and  ($object.name -eq "description")) {
 			#the description is a object of the class System.Management.Automation.PSNoteProperty
 			#and inside of the properties of that are System.Management.Automation.PSPropertyInfo objects (in our case only one)
 			#still we loop though, just in case there are more that one and see if the value (what is finally a string), does match the version string
-			Foreach ($subObject in $object.Value[0].psobject.properties) { 	
+			Foreach ($subObject in $object.Value[0].psobject.properties) {
 				 if ($subObject.Value -match "NTFS-HARDLINK-BACKUP Version: (.*)")	{
 						return $matches[1]
-				} 
-			} 
+				}
+			}
 		}
 	}
 }
@@ -527,7 +527,7 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 
 	if (-not [string]::IsNullOrEmpty($backupDestinationList)) {
 		$backupDestination = $backupDestinationList.split(",")
-	}	
+	}
 }
 
 if ([string]::IsNullOrEmpty($subst)) {
@@ -692,7 +692,7 @@ if (![string]::IsNullOrEmpty($localSubnetMask)) {
 		"(^255\.255\.255\.($validNetMaskNumbers)$)"
 	)
 	$netMaskRegex = [string]::Join('|', $netMaskRegexArray)
-	
+
 	if (!(($localSubnetMask -Match $netMaskRegex))) {
 		# The string is not a valid network mask.
 		# It should be something like 255.255.255.0
@@ -743,25 +743,25 @@ if ([string]::IsNullOrEmpty($emailSubject)) {
 
 if ([string]::IsNullOrEmpty($preExecutionCommand)) {
 	$preExecutionCommand = Get-IniParameter "preExecutionCommand" "${FQDN}" -doNotSubstitute
-}	
+}
 
 if (![string]::IsNullOrEmpty($preExecutionCommand)) {
-	$output = "`nrunning preexecution command ($preExecutionCommand)`n"	
+	$output = "`nrunning preexecution command ($preExecutionCommand)`n"
 	$output += `cmd /c  `"$preExecutionCommand`" 2`>`&1`
-	
+
 	#if the command fails we want a message in the Email, otherwise the details will be only shown in the log file
 	#make sure this if statement is directly after the cmd command
 	if(!$?) {
-		$output += "`n`nERROR: the pre-execution-command ended with an error" 
+		$output += "`n`nERROR: the pre-execution-command ended with an error"
 		$emailBody = "$emailBody`r$output`r`n"
 		$error_during_backup = $True
 	}
-	
+
 	$output += "`n"
 	echo $output
 	$tempLogContent += $output
-	}
-	
+}
+
 if ($preExecutionDelay -eq 0) {
 	$preExecutionDelay = Get-IniParameter "preExecutionDelay" "${FQDN}"
 	if ($preExecutionDelay -eq 0) {
@@ -788,7 +788,7 @@ if ($preExecutionDelay -gt 0) {
 	for ($msSleeped=0;$msSleeped -lt $preExecutionDelay; $msSleeped+=1000){
 		Start-sleep -milliseconds 1000
 		Write-Host -NoNewline "z "
-	}	
+	}
 	[Console]::SetCursorPosition(0,$CursorTop)
 	Write-Host "I guess it's time to wake up.`n"
 }
@@ -809,7 +809,7 @@ if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType lea
 		$lnPath="$script_path\..\ln.exe"
 	} else {
 		#last chance, somewhere in the PATH Environment variable
-		foreach ($ENVpath in $env:path.split(";")) {	
+		foreach ($ENVpath in $env:path.split(";")) {
 			if (Test-Path -Path "$ENVpath\ln.exe" -PathType leaf) {
 				$lnPath="$ENVpath\ln.exe"
 				break;
@@ -825,9 +825,9 @@ if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType lea
 	$output += "`nERROR: could not run ln.exe`n"
 	echo $output
 	$emailBody = "$emailBody`r`n$output`r`n"
-	
+
 	$tempLogContent += $output
-	
+
 	$parameters_ok = $False
 }
 
@@ -839,9 +839,9 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 	$output = "`nERROR: No backup destination specified`n"
 	echo $output
 	$emailBody = "$emailBody`r`n$output`r`n"
-	
+
 	$tempLogContent += $output
-	
+
 	$parameters_ok = $False
 } else {
 	foreach ($possibleBackupDestination in $backupDestination) {
@@ -864,29 +864,29 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 						New-Item $possibleBackupDestination -type directory -ea stop | Out-Null
 					}
 					subst "$substDrive" $possibleBackupDestination
-					$possibleBackupDestination = $substDrive					
+					$possibleBackupDestination = $substDrive
 					$substDone = $True
 				}
 				catch {
-					$output = "`nERROR: Destination was not found and could not be created. $_`n"
+					$output = "`nWARNING: Destination $possibleBackupDestination was not found and could not be created. $_`n"
 					echo $output
-					$emailBody = "$emailBody`r`n$output`r`n"
-					
+					$destWarningText = "$destWarningText`r`n$output`r`n"
+
 					$tempLogContent += $output
 				}
-				
+
 			} else {
 				$output = "`nERROR: subst parameter $subst is invalid`n"
 				echo $output
 				$emailBody = "$emailBody`r`n$output`r`n"
-				
+
 				$tempLogContent += $output
-				
+
 				# Flag that there is a problem, but let following code process and report any other problems before bailing out.
 				$parameters_ok = $False
 			}
 		}
-		
+
 		# Process the backup destination to find out where it might be
 		$backupDestinationArray = $possibleBackupDestination.split("\")
 
@@ -902,7 +902,7 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 				$possibleBackupDestination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($possibleBackupDestination)
 			}
 			$backupDestinationDrive = split-path $possibleBackupDestination -Qualifier
-			# toupper the backupDestinationDrive string to help findstr below match the upper-case output of subst. 
+			# toupper the backupDestinationDrive string to help findstr below match the upper-case output of subst.
 			# Also seems a reasonable thing to do in Windows, since drive letters are usually displayed in upper-case.
 			$backupDestinationDrive = $backupDestinationDrive.toupper()
 			$backupDestinationTop = $backupDestinationDrive + "\"
@@ -974,8 +974,8 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 				}
 			}
 			catch {
-				$output = "ERROR: Could not get IP address for destination $possibleBackupDestination mapped to $backupMappedPath"
-				$emailBody = "$emailBody`r`n$output`r`n$_"
+				$output = "WARNING: Could not get IP address for destination $possibleBackupDestination mapped to $backupMappedPath"
+				$destWarningText = "$destWarningText`r`n$output`r`n$_"
 				$error_during_backup = $true
 				echo $output  $_
 			}
@@ -984,7 +984,7 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 		if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 				$selectedBackupDestination = $possibleBackupDestination
 				break
-		}	
+		}
 	}
 }
 
@@ -1050,9 +1050,9 @@ if ([string]::IsNullOrEmpty($backupSources)) {
 if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 	foreach ($backup_source in $backupSources)
 	{
-		#We don't want to have "\" at the end because we will quote the path later and ln.exe would 
+		#We don't want to have "\" at the end because we will quote the path later and ln.exe would
 		#treat this as escaping of the quote (\") and can not parse the command line.
-		#ln --copy "x:\" y:\dir\newdir 
+		#ln --copy "x:\" y:\dir\newdir
 		#see also https://github.com/individual-it/ntfs-hardlink-backup/issues/16
 		if ($backup_source.substring($backup_source.length-1,1) -eq "\") {
 			$backup_source=$backup_source.Substring(0,$backup_source.Length-1)
@@ -1074,7 +1074,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$backup_source_drive_letter = split-path $backup_source -Qualifier
 				$backup_source_path =  split-path $backup_source -noQualifier
 			}
-			
+
 			#check if we try to backup a complete drive
 			if (($backup_source_drive_letter -ne "") -and ($backup_source_path -eq "")) {
 				if ($backup_source_drive_letter -match "([A-Z]):") {
@@ -1083,7 +1083,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			} else {
 				$backup_source_folder =  split-path $backup_source -leaf
 			}
-			
+
 			$actualBackupDestination = "$selectedBackupDestination\$backup_source_folder"
 
 			#if the user wants to keep just one backup we do a mirror without any date, so we don't need
@@ -1217,9 +1217,9 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					$escaped_backup_source_folder = $backup_source_folder
 				}
 
-				
+
 				if ($backupsToKeepPerYear -gt 0) {
-				
+
 					#find all backups per year
 					foreach ($item in $oldBackupItems) {
 						if ($item.Name  -match '^'+$escaped_backup_source_folder+' - (\d{4})-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' ) {
@@ -1229,28 +1229,28 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 							$lastBackupFoldersPerYear[$matches[1]]+= $item
 						}
 					}
-				
+
 					#decide which backups from the last year to keep
 					foreach ($year in $($lastBackupFoldersPerYear.keys | sort)) {
 						#echo $year
 						if (!($lastBackupFoldersPerYearToKeep.ContainsKey($year))) {
 							$lastBackupFoldersPerYearToKeep[$year] = @()
 						}
-						
+
 						# If we want to keep more backups than are actually there then just keep the whole array
 						if ($backupsToKeepPerYear -ge $lastBackupFoldersPerYear[$year].length) {
 							$lastBackupFoldersPerYearToKeep[$year] = $lastBackupFoldersPerYear[$year]
 						} else {
 							#calculate the day we ideally would like to have a backup of
 							#then find the backup we have that is nearest to that date and keep it
-							
+
 							$daysBetweenBackupsToKeep = 365/$backupsToKeepPerYear
 							$dayOfYearToKeepBackupOf = 0
 							while (($lastBackupFoldersPerYearToKeep[$year].length -lt $backupsToKeepPerYear) -and ($lastBackupFoldersPerYear[$year].length -gt 0)) {
 								$dayOfYearToKeepBackupOf = $dayOfYearToKeepBackupOf + $daysBetweenBackupsToKeep
 								$previousDaysDifference = 366
 								foreach ($backupItem in $lastBackupFoldersPerYear[$year]) {
-									
+
 									$backupItem.Name  -match '^'+$escaped_backup_source_folder+' - (\d{4}-\d{2}-\d{2}) \d{2}-\d{2}-\d{2}$' | Out-Null
 									$daysDifference = [math]::abs($dayOfYearToKeepBackupOf-(Get-Date $matches[1]).DayOfYear)
 
@@ -1259,22 +1259,22 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 									}
 									$previousDaysDifference = $daysDifference
 								}
-								
+
 								$lastBackupFoldersPerYearToKeep[$year] +=$bestBackupToKeep
 								$lastBackupFoldersPerYear[$year] = $lastBackupFoldersPerYear[$year] -ne $bestBackupToKeep
-							}	
+							}
 						}
 						$thisYearBackupsKept = $lastBackupFoldersPerYearToKeep[$year].length
 						$yearBackupsKeptText += "Keeping $thisYearBackupsKept backup(s) from $year `r`n"
 					}
-				
+
 				}
-				
+
 				# get me the last backup if any
 				foreach ($item in $oldBackupItems) {
 					if ($item.Name  -match '^'+$escaped_backup_source_folder+' - (\d{4})-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$' ) {
 						$lastBackupFolderName = $item.Name
-						
+
 						#if we have that folder in the list of folders to keep do not add it to the list
 						#of lastBackupFolders because they will be used for deleting old folders
 						if ($lastBackupFoldersPerYearToKeep[$matches[1]] -notcontains $item) {
@@ -1282,9 +1282,9 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 						}
 					}
 				}
-				
+
 			}
-			
+
 			if ($traditional -eq $True) {
 				$traditionalArgument = " --traditional "
 			} else {
@@ -1307,20 +1307,20 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$spliceArgument = " --splice "
 			} else {
 				$spliceArgument = ""
-			}			
-			
+			}
+
 			if ($unroll -eq $True) {
 				$unrollArgument = " --unroll "
 			} else {
 				$unrollArgument = ""
-			}			
-			
+			}
+
 			if ($backupModeACLs -eq $True) {
 				$backupModeACLsArgument = " --backup "
 			} else {
 				$backupModeACLsArgument = ""
-			}				
-			
+			}
+
 			if ($timeTolerance -ne 0) {
 				$timeToleranceArgument = " --timetolerance $timeTolerance "
 			} else {
@@ -1366,10 +1366,10 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				#echo "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"
 				`cmd /c  "`"`"$lnPath`" $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 `""`
 			}
-			
+
 			$saved_lastexitcode = $LASTEXITCODE
 			if ($saved_lastexitcode -ne 0) {
-				$output = "`n`nERROR: the ln command ended with exit code [$saved_lastexitcode]" 
+				$output = "`n`nERROR: the ln command ended with exit code [$saved_lastexitcode]"
 				$error_during_backup = $true
 				$ln_error = $true
 			} else {
@@ -1382,7 +1382,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$backup_response = get-content "$LogFile"
 				foreach ( $line in $backup_response.length..1 ) {
 					$summary =  $backup_response[$line] + "`n" + $summary
-					
+
 					#do we need this line if we already checked for the exitcode?
 					if ($backup_response[$line] -match '(.*):\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+(?:\d+(?:\,\d*)?|-)\s+([1-9]+\d*(?:\,\d*)?)') {
 						$error_during_backup = $true
@@ -1571,6 +1571,12 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 	}
 
 } else {
+	if ($destWarningText) {
+		# We might have tested multiple backup destinations and in the end not found a good destination
+		# Write out the messages about those checks to the email body so the recipient can see easily the process and problems that happened along the way.
+		$emailBody = "$emailBody`r`n$destWarningText`r`n"
+	}
+
 	if ($parameters_ok -eq $True) {
 		if ($doBackup -eq $True) {
 			# The destination drive or \\server\share does not exist.
