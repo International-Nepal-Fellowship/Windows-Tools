@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA2
+	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA3
 
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
@@ -501,16 +501,29 @@ if ($iniFile) {
 	if (Test-Path -Path $iniFile -PathType leaf) {
 		$output = "Using ini file`r`n$iniFile`r`n"
 		$emailBody = "$emailBody`r`n$output`r`n"
+		$tempLogContent += $output
 		echo $output
 		$global:iniFileContent = Get-IniContent "${iniFile}"
 	} else {
 		$global:iniFileContent =  New-Object System.Collections.Specialized.OrderedDictionary
 		$output = "ERROR: Could not find ini file`r`n$iniFile`r`n"
 		$emailBody = "$emailBody`r`n$output`r`n"
+		$tempLogContent += $output
 		echo $output
 	}
 } else {
 		$global:iniFileContent =  New-Object System.Collections.Specialized.OrderedDictionary
+}
+
+# Report to the log file the IP Addresses that this system has.
+# This is useful to be able to work out what might have gone wrong with a backup.
+$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
+$output = "Network addresses:`r`n"
+$tempLogContent += $output
+
+foreach ($adapter in $localAdapters) {
+	$output = $adapter.IPAddress + " " + $adapter.DefaultIPGateway + " " + $adapter.Description + "`r`n"
+	$tempLogContent += $output
 }
 
 $parameters_ok = $True
