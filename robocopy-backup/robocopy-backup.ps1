@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	ROBOCOPY-BACKUP Version: 1.0
+	ROBOCOPY-BACKUP Version: 1.1-ALPHA1
 
 	This software is used for creating mirror copies/backups using Robocopy
 	This code is based on ntfs-hardlink-backup.ps1 from https://github.com/individual-it/ntfs-hardlink-backup
@@ -427,6 +427,7 @@ $deleteOldLogFiles = $False
 $FQDN = [System.Net.DNS]::GetHostByName('').HostName
 $userName = [Environment]::UserName
 $tempLogContent = ""
+$substDone = $False
 
 $versionString=Get-Version
 
@@ -706,10 +707,24 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 				$substDrive = $subst.Substring(0,1) + ":"
 				# Delete any previous or externally-defined subst-ed drive on this letter.
 				# Send the output to null, as usually the first attempted delete will give an error, and we do not care.
+				$substDone = $False
 				subst "$substDrive" /d | Out-Null
-				subst "$substDrive" $possibleBackupDestination
+				try {
+					if (!(Test-Path -Path $possibleBackupDestination)) {
+						New-Item $possibleBackupDestination -type directory -ea stop | Out-Null
+					}
+					subst "$substDrive" $possibleBackupDestination
+					$possibleBackupDestination = $substDrive
+					$substDone = $True
+				}
+				catch {
+					$output = "`nWARNING: Destination $possibleBackupDestination was not found and could not be created. $_`n"
+					echo $output
+					$destWarningText = "$destWarningText`r`n$output`r`n"
 
-				$possibleBackupDestination = $substDrive
+					$tempLogContent += $output
+				}
+
 			} else {
 				$output = "`nERROR: subst parameter $subst is invalid`n"
 				echo $output
@@ -809,8 +824,8 @@ if ([string]::IsNullOrEmpty($backupDestination)) {
 				}
 			}
 			catch {
-				$output = "ERROR: Could not get IP address for destination $possibleBackupDestination mapped to $backupMappedPath"
-				$emailBody = "$emailBody`r`n$output`r`n$_"
+				$output = "WARNING: Could not get IP address for destination $possibleBackupDestination mapped to $backupMappedPath"
+				$destWarningText = "$destWarningText`r`n$output`r`n$_"
 				$error_during_backup = $true
 				echo $output  $_
 			}
@@ -1213,6 +1228,12 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 		}
 	}
 } else {
+	if ($destWarningText) {
+		# We might have tested multiple backup destinations and in the end not found a good destination
+		# Write out the messages about those checks to the email body so the recipient can see easily the process and problems that happened along the way.
+		$emailBody = "$emailBody`r`n$destWarningText`r`n"
+	}
+
 	if ($parameters_ok -eq $True) {
 		if ($doBackup -eq $True) {
 			# The destination drive or \\server\share does not exist.
@@ -1326,9 +1347,10 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	echo "done"
 }
 
-if (-not ([string]::IsNullOrEmpty($substDrive))) {
+if ($substDone) {
 	# Delete any drive letter substitution done earlier
 	# Note: the subst drive might have contained the log file, so we cannot delete earlier since it is needed to zip and email.
+	echo "`nRemoving subst of $substDrive`n"
 	subst "$substDrive" /D
 }
 
