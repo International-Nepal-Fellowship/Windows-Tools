@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	ROBOCOPY-BACKUP Version: 1.1-ALPHA2
+	ROBOCOPY-BACKUP Version: 1.1-ALPHA3
 
 	This software is used for creating mirror copies/backups using Robocopy
 	This code is based on ntfs-hardlink-backup.ps1 from https://github.com/individual-it/ntfs-hardlink-backup
@@ -445,16 +445,29 @@ if ($iniFile) {
 	if (Test-Path -Path $iniFile -PathType leaf) {
 		$output = "Using ini file`r`n$iniFile`r`n"
 		$emailBody = "$emailBody`r`n$output`r`n"
+		$tempLogContent += $output
 		echo $output
 		$global:iniFileContent = Get-IniContent "${iniFile}"
 	} else {
 		$global:iniFileContent =  New-Object System.Collections.Specialized.OrderedDictionary
 		$output = "ERROR: Could not find ini file`r`n$iniFile`r`n"
 		$emailBody = "$emailBody`r`n$output`r`n"
+		$tempLogContent += $output
 		echo $output
 	}
 } else {
 		$global:iniFileContent =  New-Object System.Collections.Specialized.OrderedDictionary
+}
+
+# Report to the log file the IP Addresses that this system has.
+# This is useful to be able to work out what might have gone wrong with a backup.
+$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
+$output = "Network addresses:`r`n"
+$tempLogContent += $output
+
+foreach ($adapter in $localAdapters) {
+	$output = $adapter.IPAddress + " " + $adapter.DefaultIPGateway + " " + $adapter.Description + "`r`n"
+	$tempLogContent += $output
 }
 
 $parameters_ok = $True
