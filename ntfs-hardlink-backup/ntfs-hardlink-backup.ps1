@@ -1017,15 +1017,13 @@ foreach ($adapter in $localAdapters) {
 	}
 }
 
-# Try to run ln.exe just to check if it can start.
-# It is possible that the ln version does not match the Windows version (e.g. 64bit installed on a 32bit system)
-$lncheckArgs = @( )
-$lncheckArgs += "-h"
-& $lnPath $lncheckArgs
-
-# If we could not find ln.exe, there is no point in trying to make a backup
-if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf) -or ($LASTEXITCODE -ne 0) ) {
-	$output = "`nERROR: could not run ln.exe`n"
+# If we cannot find ln.exe, there is no point in trying to make a backup
+if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf)) {
+	if ([string]::IsNullOrEmpty($lnPath)) {
+		$output = "`nERROR: ln.exe not found`n"
+	} elseif (!(Test-Path -Path $lnPath -PathType leaf)) {
+		$output = "`nERROR: ln.exe is not a file`n"
+	}
 	echo $output
 	$emailBody = "$emailBody`r`n$output`r`n"
 
@@ -1034,6 +1032,37 @@ if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType lea
 	}
 
 	$parameters_ok = $False
+} else {
+	try {
+		# Try to run ln.exe just to check if it can start.
+		$lncheckArgs = @( )
+		$lncheckArgs += "-h"
+		& $lnPath $lncheckArgs
+		if ($LASTEXITCODE -ne 0) {
+			$output = "`nERROR: Cannot run ln.exe with help`n"
+			echo $output
+			$emailBody = "$emailBody`r`n$output`r`n"
+
+			if ($LogFile) {
+				$output | Out-File "$LogFile"  -encoding ASCII -append
+			}
+
+			$parameters_ok = $False
+		}
+	}
+	catch {
+		# It is possible that the ln version does not match the Windows version (e.g. 64bit installed on a 32bit system)
+		$output = "`nERROR: Cannot run ln.exe - maybe you have the 64-bit version on a 32-bit system`n"
+		echo $output $_
+		$emailBody = "$emailBody`r`n$output`r`n$_"
+
+		if ($LogFile) {
+			$output | Out-File "$LogFile"  -encoding ASCII -append
+		}
+
+		$parameters_ok = $False
+	}
+
 }
 
 if (![string]::IsNullOrEmpty($preExecutionCommand)) {
