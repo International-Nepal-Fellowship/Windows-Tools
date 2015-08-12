@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA3
+	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA4
 
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
@@ -515,17 +515,6 @@ if ($iniFile) {
 		$global:iniFileContent =  New-Object System.Collections.Specialized.OrderedDictionary
 }
 
-# Report to the log file the IP Addresses that this system has.
-# This is useful to be able to work out what might have gone wrong with a backup.
-$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
-$output = "Network addresses:`r`n"
-$tempLogContent += $output
-
-foreach ($adapter in $localAdapters) {
-	$output = $adapter.IPAddress + " " + $adapter.DefaultIPGateway + " " + $adapter.Description + "`r`n"
-	$tempLogContent += $output
-}
-
 $parameters_ok = $True
 
 if ([string]::IsNullOrEmpty($backupSources)) {
@@ -758,52 +747,12 @@ if ([string]::IsNullOrEmpty($preExecutionCommand)) {
 	$preExecutionCommand = Get-IniParameter "preExecutionCommand" "${FQDN}" -doNotSubstitute
 }
 
-if (![string]::IsNullOrEmpty($preExecutionCommand)) {
-	$output = "`nrunning preexecution command ($preExecutionCommand)`n"
-	$output += `cmd /c  `"$preExecutionCommand`" 2`>`&1`
-
-	#if the command fails we want a message in the Email, otherwise the details will be only shown in the log file
-	#make sure this if statement is directly after the cmd command
-	if(!$?) {
-		$output += "`n`nERROR: the pre-execution-command ended with an error"
-		$emailBody = "$emailBody`r$output`r`n"
-		$error_during_backup = $True
-	}
-
-	$output += "`n"
-	echo $output
-	$tempLogContent += $output
-}
-
 if ($preExecutionDelay -eq 0) {
 	$preExecutionDelay = Get-IniParameter "preExecutionDelay" "${FQDN}"
 	if ($preExecutionDelay -eq 0) {
 		# Looks dumb, but left here if you want to change the default from zero.
 		$preExecutionDelay = 0;
 	}
-}
-
-
-if ($preExecutionDelay -gt 0) {
-	echo "I'm gona be lazy now"
-
-	Write-Host -NoNewline "
-
-         ___    z
-       _/   |  z
-      |_____|{)_
-        --- ==\/\ |
-      [_____]  __)|
-      |   |  //| |
-	"
-	$CursorTop=[Console]::CursorTop
-	[Console]::SetCursorPosition(18,$CursorTop-7)
-	for ($msSleeped=0;$msSleeped -lt $preExecutionDelay; $msSleeped+=1000){
-		Start-sleep -milliseconds 1000
-		Write-Host -NoNewline "z "
-	}
-	[Console]::SetCursorPosition(0,$CursorTop)
-	Write-Host "I guess it's time to wake up.`n"
 }
 
 if ([string]::IsNullOrEmpty($postExecutionCommand)) {
@@ -829,19 +778,6 @@ if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType lea
 			}
 		}
 	}
-}
-#try to run ln.exe just to check if it can start. Possible that the ln version does not fit the Windows version (e.g. 64bit installed on a 32bit system)
-$output=`cmd /c "`"$lnPath`"  -h" 2`>`&1`
-
-#if we could not find ln.exe, there is no point in trying to make a backup
-if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf) -or ($LASTEXITCODE -ne 0) ) {
-	$output += "`nERROR: could not run ln.exe`n"
-	echo $output
-	$emailBody = "$emailBody`r`n$output`r`n"
-
-	$tempLogContent += $output
-
-	$parameters_ok = $False
 }
 
 $dateTime = get-date -f "yyyy-MM-dd HH-mm-ss"
@@ -1057,6 +993,83 @@ if ([string]::IsNullOrEmpty($backupSources)) {
 		$output | Out-File "$LogFile"  -encoding ASCII -append
 	}
 	$parameters_ok = $False
+}
+
+# Report to the log file the IP Addresses that this system has.
+# If there is no log file then echo the details.
+# This is useful to be able to work out what might have gone wrong with a backup.
+$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
+$output = "Network addresses:`r`n"
+if ($LogFile) {
+	$output | Out-File "$LogFile"  -encoding ASCII -append
+} else {
+	echo $output
+}
+
+foreach ($adapter in $localAdapters) {
+	$output = $adapter.IPAddress + " " + $adapter.DefaultIPGateway + " " + $adapter.Description + "`r`n"
+	if ($LogFile) {
+		$output | Out-File "$LogFile"  -encoding ASCII -append
+	} else {
+		echo $output
+	}
+}
+
+#try to run ln.exe just to check if it can start. Possible that the ln version does not fit the Windows version (e.g. 64bit installed on a 32bit system)
+$output=`cmd /c "`"$lnPath`"  -h" 2`>`&1`
+
+#if we could not find ln.exe, there is no point in trying to make a backup
+if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf) -or ($LASTEXITCODE -ne 0) ) {
+	$output += "`nERROR: could not run ln.exe`n"
+	echo $output
+	$emailBody = "$emailBody`r`n$output`r`n"
+
+	if ($LogFile) {
+		$output | Out-File "$LogFile"  -encoding ASCII -append
+	}
+
+	$parameters_ok = $False
+}
+
+if (![string]::IsNullOrEmpty($preExecutionCommand)) {
+	$output = "`nrunning preexecution command ($preExecutionCommand)`n"
+	$output += `cmd /c  `"$preExecutionCommand`" 2`>`&1`
+
+	#if the command fails we want a message in the Email, otherwise the details will be only shown in the log file
+	#make sure this if statement is directly after the cmd command
+	if(!$?) {
+		$output += "`n`nERROR: the pre-execution-command ended with an error"
+		$emailBody = "$emailBody`r$output`r`n"
+		$error_during_backup = $True
+	}
+
+	$output += "`n"
+	echo $output
+	if ($LogFile) {
+		$output | Out-File "$LogFile"  -encoding ASCII -append
+	}
+}
+
+if ($preExecutionDelay -gt 0) {
+	echo "I'm gona be lazy now"
+
+	Write-Host -NoNewline "
+
+         ___    z
+       _/   |  z
+      |_____|{)_
+        --- ==\/\ |
+      [_____]  __)|
+      |   |  //| |
+	"
+	$CursorTop=[Console]::CursorTop
+	[Console]::SetCursorPosition(18,$CursorTop-7)
+	for ($msSleeped=0;$msSleeped -lt $preExecutionDelay; $msSleeped+=1000){
+		Start-sleep -milliseconds 1000
+		Write-Host -NoNewline "z "
+	}
+	[Console]::SetCursorPosition(0,$CursorTop)
+	Write-Host "I guess it's time to wake up.`n"
 }
 
 # Just test for the existence of the top of the backup destination. "ln" will create any folders as needed, as long as the top exists.
