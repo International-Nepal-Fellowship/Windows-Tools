@@ -1037,7 +1037,7 @@ if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType lea
 		# Try to run ln.exe just to check if it can start.
 		$lncheckArgs = @( )
 		$lncheckArgs += "-h"
-		& $lnPath $lncheckArgs
+		& $lnPath $lncheckArgs | Out-Null
 		if ($LASTEXITCODE -ne 0) {
 			$output = "`nERROR: Cannot run ln.exe with help`n"
 			echo $output
@@ -1085,7 +1085,7 @@ if (![string]::IsNullOrEmpty($preExecutionCommand)) {
 		$output | Out-File "$LogFile"  -encoding ASCII -append
 	}
 
-	echo $preExecutionCmd $preExecutionArgs
+	# echo $preExecutionCmd $preExecutionArgs
 	if ($preExecutionNumArgs -gt 0) {
 		if ($LogFile) {
 			& $preExecutionCmd $preExecutionArgs | Out-File "$LogFile" -encoding ASCII -append
@@ -1448,7 +1448,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$lnArgs += $actualBackupDestination
 			}
 
-			echo $lnPath $lnArgs
+			# echo $lnPath $lnArgs
 			if ($LogFile) {
 				& $lnPath $lnArgs | Out-File "$LogFile" -encoding ASCII -append
 			} else {
@@ -1535,7 +1535,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					$lndelArgs += "--deeppathdelete"
 					$lndelArgs += $folderToDelete
 
-					echo $lnPath $lndelArgs
+					# echo $lnPath $lndelArgs
 					if ($LogFile) {
 						& $lnPath $lndelArgs | Out-File "$LogFile" -encoding ASCII -append
 					} else {
@@ -1824,7 +1824,7 @@ if (-not ([string]::IsNullOrEmpty($postExecutionCommand))) {
 	} else {
 		$postExecutionArgs = ""
 	}
-	echo $postExecutionCmd $postExecutionArgs
+	# echo $postExecutionCmd $postExecutionArgs
 	if ($postExecutionNumArgs -gt 0) {
 		& $postExecutionCmd $postExecutionArgs
 	} else {
