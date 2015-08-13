@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA5
+	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA6
 
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
@@ -100,14 +100,10 @@
 	Switch on display of the time at each step of the job.
 .PARAMETER preExecutionCommand
 	Command to run before the start of the backup.
-	If the command or command path or parameters have spaces in them,
-	then put the command in a bat file and specify the bat file in this parameter.
 .PARAMETER preExecutionDelay
 	Time in milliseconds to pause between running the preExecutionCommand and the start of the backup. Default = 0
 .PARAMETER postExecutionCommand
 	Command to run after the backup is done.
-	If the command or command path or parameters have spaces in them,
-	then put the command in a bat file and specify the bat file in this parameter.
 .PARAMETER lnPath
 	The full path to the ln executable. e.g. c:\Tools\Backup\ln.exe
 .PARAMETER version
@@ -468,6 +464,79 @@ Function Get-Version
 				}
 			}
 		}
+	}
+}
+
+function Split-CommandLine
+{
+	<#
+	.Synopsis
+		Parse command-line arguments using Win32 API CommandLineToArgvW function.
+
+	.Link
+		https://github.com/beatcracker/Powershell-Misc/blob/master/Split-CommandLine.ps1
+		http://edgylogic.com/blog/powershell-and-external-commands-done-right/
+
+	.Description
+		This is the Cmdlet version of the code from the article http://edgylogic.com/blog/powershell-and-external-commands-done-right.
+		It can parse command-line arguments using Win32 API function CommandLineToArgvW . 
+
+	.Parameter CommandLine
+		A string representing the command-line to parse. If not specified, the command-line of the current PowerShell host is used.
+	#>
+	[CmdletBinding()]
+	Param
+	(
+		[Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true, Position=0)]
+		[ValidateNotNullOrEmpty()]
+		[string]$CommandLine
+	)
+
+	Begin
+	{
+		$Kernel32Definition = @'
+			[DllImport("kernel32")]
+			public static extern IntPtr LocalFree(IntPtr hMem);
+'@
+		$Kernel32 = Add-Type -MemberDefinition $Kernel32Definition -Name 'Kernel32' -Namespace 'Win32' -PassThru
+
+		$Shell32Definition = @'
+			[DllImport("shell32.dll", SetLastError = true)]
+			public static extern IntPtr CommandLineToArgvW(
+				[MarshalAs(UnmanagedType.LPWStr)] string lpCmdLine,
+				out int pNumArgs);
+'@
+		$Shell32 = Add-Type -MemberDefinition $Shell32Definition -Name 'Shell32' -Namespace 'Win32' -PassThru
+	}
+
+	Process
+	{
+		$ParsedArgCount = 0
+		$ParsedArgsPtr = $Shell32::CommandLineToArgvW($CommandLine, [ref]$ParsedArgCount)
+
+		Try
+		{
+			$ParsedArgs = @();
+
+			0..$ParsedArgCount | ForEach-Object {
+				$ParsedArgs += [System.Runtime.InteropServices.Marshal]::PtrToStringUni(
+					[System.Runtime.InteropServices.Marshal]::ReadIntPtr($ParsedArgsPtr, $_ * [IntPtr]::Size)
+				)
+			}
+		}
+		Finally
+		{
+			$Kernel32::LocalFree($ParsedArgsPtr) | Out-Null
+		}
+
+		$ret = @()
+
+		# -lt to skip the last item, which is a NULL ptr
+		for ($i = 0; $i -lt $ParsedArgCount; $i += 1) {
+			$ret += $ParsedArgs[$i]
+		}
+
+		return $ret
 	}
 }
 
@@ -1070,7 +1139,7 @@ if (![string]::IsNullOrEmpty($preExecutionCommand)) {
 	# in the "ampersand" invoking.
 	# The remaining parameters (if any) need to be passed as an array.
 	# So we split the user-provided string into space-separated parts then specifically take out the first part.
-	$preExecutionArgs = $preExecutionCommand -split '\s+'
+	$preExecutionArgs = Split-CommandLine $preExecutionCommand
 	$preExecutionCmd = $preExecutionArgs[0]
 	$preExecutionNumArgs = $preExecutionArgs.Length - 1
 	if ($preExecutionNumArgs -gt 0) {
@@ -1816,7 +1885,7 @@ if ($substDone) {
 
 if (-not ([string]::IsNullOrEmpty($postExecutionCommand))) {
 	echo "`nrunning postexecution command ($postExecutionCommand)"
-	$postExecutionArgs = $postExecutionCommand -split '\s+'
+	$postExecutionArgs = Split-CommandLine $postExecutionCommand
 	$postExecutionCmd = $postExecutionArgs[0]
 	$postExecutionNumArgs = $postExecutionArgs.Length - 1
 	if ($postExecutionNumArgs -gt 0) {
