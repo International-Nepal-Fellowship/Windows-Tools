@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA6
+	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA7
 
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
@@ -100,10 +100,14 @@
 	Switch on display of the time at each step of the job.
 .PARAMETER preExecutionCommand
 	Command to run before the start of the backup.
+	Note: Only a single command with parameters is supported. If you need to do multiple commands (separated by "&", "&&", "||"...)
+	then put them in a batch file and call the batch file from here.
 .PARAMETER preExecutionDelay
 	Time in milliseconds to pause between running the preExecutionCommand and the start of the backup. Default = 0
 .PARAMETER postExecutionCommand
 	Command to run after the backup is done.
+	Note: Only a single command with parameters is supported. If you need to do multiple commands (separated by "&", "&&", "||"...)
+	then put them in a batch file and call the batch file from here.
 .PARAMETER lnPath
 	The full path to the ln executable. e.g. c:\Tools\Backup\ln.exe
 .PARAMETER version
