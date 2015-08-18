@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	ROBOCOPY-BACKUP Version: 1.1-ALPHA3
+	ROBOCOPY-BACKUP Version: 1.1-ALPHA4
 
 	This software is used for creating mirror copies/backups using Robocopy
 	This code is based on ntfs-hardlink-backup.ps1 from https://github.com/individual-it/ntfs-hardlink-backup
@@ -70,10 +70,14 @@
 	Switch on display of the time at each step of the job.
 .PARAMETER preExecutionCommand
 	Command to run before the start of the backup.
+	Note: Only a single command with parameters is supported. If you need to do multiple commands (separated by "&", "&&", "||"...)
+	then put them in a batch file and call the batch file from here.
 .PARAMETER preExecutionDelay
 	Time in milliseconds to pause between running the preExecutionCommand and the start of the backup. Default = 0
 .PARAMETER postExecutionCommand
 	Command to run after the backup is done.
+	Note: Only a single command with parameters is supported. If you need to do multiple commands (separated by "&", "&&", "||"...)
+	then put them in a batch file and call the batch file from here.
 .PARAMETER version
 	print the version information and exit.
 .EXAMPLE
@@ -413,6 +417,79 @@ Function Get-Version
 	}
 }
 
+function Split-CommandLine
+{
+	<#
+	.Synopsis
+		Parse command-line arguments using Win32 API CommandLineToArgvW function.
+
+	.Link
+		https://github.com/beatcracker/Powershell-Misc/blob/master/Split-CommandLine.ps1
+		http://edgylogic.com/blog/powershell-and-external-commands-done-right/
+
+	.Description
+		This is the Cmdlet version of the code from the article http://edgylogic.com/blog/powershell-and-external-commands-done-right.
+		It can parse command-line arguments using Win32 API function CommandLineToArgvW . 
+
+	.Parameter CommandLine
+		A string representing the command-line to parse. If not specified, the command-line of the current PowerShell host is used.
+	#>
+	[CmdletBinding()]
+	Param
+	(
+		[Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true, Position=0)]
+		[ValidateNotNullOrEmpty()]
+		[string]$CommandLine
+	)
+
+	Begin
+	{
+		$Kernel32Definition = @'
+			[DllImport("kernel32")]
+			public static extern IntPtr LocalFree(IntPtr hMem);
+'@
+		$Kernel32 = Add-Type -MemberDefinition $Kernel32Definition -Name 'Kernel32' -Namespace 'Win32' -PassThru
+
+		$Shell32Definition = @'
+			[DllImport("shell32.dll", SetLastError = true)]
+			public static extern IntPtr CommandLineToArgvW(
+				[MarshalAs(UnmanagedType.LPWStr)] string lpCmdLine,
+				out int pNumArgs);
+'@
+		$Shell32 = Add-Type -MemberDefinition $Shell32Definition -Name 'Shell32' -Namespace 'Win32' -PassThru
+	}
+
+	Process
+	{
+		$ParsedArgCount = 0
+		$ParsedArgsPtr = $Shell32::CommandLineToArgvW($CommandLine, [ref]$ParsedArgCount)
+
+		Try
+		{
+			$ParsedArgs = @();
+
+			0..$ParsedArgCount | ForEach-Object {
+				$ParsedArgs += [System.Runtime.InteropServices.Marshal]::PtrToStringUni(
+					[System.Runtime.InteropServices.Marshal]::ReadIntPtr($ParsedArgsPtr, $_ * [IntPtr]::Size)
+				)
+			}
+		}
+		Finally
+		{
+			$Kernel32::LocalFree($ParsedArgsPtr) | Out-Null
+		}
+
+		$ret = @()
+
+		# -lt to skip the last item, which is a NULL ptr
+		for ($i = 0; $i -lt $ParsedArgCount; $i += 1) {
+			$ret += $ParsedArgs[$i]
+		}
+
+		return $ret
+	}
+}
+
 $emailBody = ""
 $error_during_backup = $false
 $doBackup = $true
@@ -457,17 +534,6 @@ if ($iniFile) {
 	}
 } else {
 		$global:iniFileContent =  New-Object System.Collections.Specialized.OrderedDictionary
-}
-
-# Report to the log file the IP Addresses that this system has.
-# This is useful to be able to work out what might have gone wrong with a backup.
-$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
-$output = "Network addresses:`r`n"
-$tempLogContent += $output
-
-foreach ($adapter in $localAdapters) {
-	$output = $adapter.IPAddress + " " + $adapter.DefaultIPGateway + " " + $adapter.Description + "`r`n"
-	$tempLogContent += $output
 }
 
 $parameters_ok = $True
@@ -643,51 +709,12 @@ if ([string]::IsNullOrEmpty($preExecutionCommand)) {
 	$preExecutionCommand = Get-IniParameter "preExecutionCommand" "${FQDN}" -doNotSubstitute
 }
 
-if (![string]::IsNullOrEmpty($preExecutionCommand)) {
-	$output = "`nrunning preexecution command ($preExecutionCommand)`n"
-	$output += `cmd /c  `"$preExecutionCommand`" 2`>`&1`
-
-	#if the command fails we want a message in the Email, otherwise the details will be only shown in the log file
-	#make sure this if statement is directly after the cmd command
-	if(!$?) {
-		$output += "`n`nERROR: the pre-execution-command ended with an error"
-		$emailBody = "$emailBody`r$output`r`n"
-		$error_during_backup = $True
-	}
-
-	$output += "`n"
-	echo $output
-	$tempLogContent += $output
-	}
-
 if ($preExecutionDelay -eq 0) {
 	$preExecutionDelay = Get-IniParameter "preExecutionDelay" "${FQDN}"
 	if ($preExecutionDelay -eq 0) {
 		# Looks dumb, but left here if you want to change the default from zero.
 		$preExecutionDelay = 0;
 	}
-}
-
-if ($preExecutionDelay -gt 0) {
-	echo "I'm gona be lazy now"
-
-	Write-Host -NoNewline "
-
-         ___    z
-       _/   |  z
-      |_____|{)_
-        --- ==\/\ |
-      [_____]  __)|
-      |   |  //| |
-	"
-	$CursorTop=[Console]::CursorTop
-	[Console]::SetCursorPosition(18,$CursorTop-7)
-	for ($msSleeped=0;$msSleeped -lt $preExecutionDelay; $msSleeped+=1000){
-		Start-sleep -milliseconds 1000
-		Write-Host -NoNewline "z "
-	}
-	[Console]::SetCursorPosition(0,$CursorTop)
-	Write-Host "I guess it's time to wake up.`n"
 }
 
 if ([string]::IsNullOrEmpty($postExecutionCommand)) {
@@ -909,6 +936,97 @@ if ([string]::IsNullOrEmpty($backupSources)) {
 	$parameters_ok = $False
 }
 
+# Report to the log file the IP Addresses that this system has.
+# If there is no log file then echo the details.
+# This is useful to be able to work out what might have gone wrong with a backup.
+$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
+$output = "Network addresses:`r`n"
+if ($LogFile) {
+	$output | Out-File "$LogFile"  -encoding ASCII -append
+} else {
+	echo $output
+}
+
+foreach ($adapter in $localAdapters) {
+	$output = $adapter.IPAddress + " " + $adapter.DefaultIPGateway + " " + $adapter.Description + "`r`n"
+	if ($LogFile) {
+		$output | Out-File "$LogFile"  -encoding ASCII -append
+	} else {
+		echo $output
+	}
+}
+
+if (![string]::IsNullOrEmpty($preExecutionCommand)) {
+	# It seems that the first word of the command string (the command itself) has to be sent individually
+	# in the "ampersand" invoking.
+	# The remaining parameters (if any) need to be passed as an array.
+	# So we split the user-provided string into space-separated parts then specifically take out the first part.
+	$preExecutionArgs = Split-CommandLine $preExecutionCommand
+	$preExecutionCmd = $preExecutionArgs[0]
+	$preExecutionNumArgs = $preExecutionArgs.Length - 1
+	if ($preExecutionNumArgs -gt 0) {
+		$preExecutionArgs = $preExecutionArgs[1..$preExecutionNumArgs]
+	} else {
+		$preExecutionArgs = ""
+	}
+
+	$output = "`nRunning preexecution command ($preExecutionCommand)"
+	echo $output
+	if ($LogFile) {
+		$output | Out-File "$LogFile"  -encoding ASCII -append
+	}
+
+	# echo $preExecutionCmd $preExecutionArgs
+	if ($preExecutionNumArgs -gt 0) {
+		if ($LogFile) {
+			& $preExecutionCmd $preExecutionArgs | Out-File "$LogFile" -encoding ASCII -append
+		} else {
+			& $preExecutionCmd $preExecutionArgs
+		}
+	} else {
+		if ($LogFile) {
+			& $preExecutionCmd | Out-File "$LogFile" -encoding ASCII -append
+		} else {
+			& $preExecutionCmd
+		}
+	}
+
+	# If the command fails we want a message in the Email, otherwise the details will be only shown in the log file
+	# Make sure this if statement is directly after the command has been run.
+	if (!$?) {
+		$output = "`n`nERROR: the pre-execution-command ended with an error"
+		$emailBody = "$emailBody`r$output`r`n"
+		$error_during_backup = $True
+		$output += "`n"
+		echo $output
+		if ($LogFile) {
+			$output | Out-File "$LogFile"  -encoding ASCII -append
+		}
+	}
+}
+
+if ($preExecutionDelay -gt 0) {
+	echo "I'm gona be lazy now"
+
+	Write-Host -NoNewline "
+
+         ___    z
+       _/   |  z
+      |_____|{)_
+        --- ==\/\ |
+      [_____]  __)|
+      |   |  //| |
+	"
+	$CursorTop=[Console]::CursorTop
+	[Console]::SetCursorPosition(18,$CursorTop-7)
+	for ($msSleeped=0;$msSleeped -lt $preExecutionDelay; $msSleeped+=1000){
+		Start-sleep -milliseconds 1000
+		Write-Host -NoNewline "z "
+	}
+	[Console]::SetCursorPosition(0,$CursorTop)
+	Write-Host "I guess it's time to wake up.`n"
+}
+
 # Just test for the existence of the top of the backup destination. "ln" will create any folders as needed, as long as the top exists.
 if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backupDestinationTop)) {
 	foreach ($backup_source in $backupSources)
@@ -1055,10 +1173,6 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			echo "Source: $backup_source_path"
 			echo "Destination: $actualBackupDestination$backupMappedString"
 
-			if ($LogFile) {
-				$logFileCommandAppend = " >> `"$LogFile`""
-			}
-
 			$start_time = get-date -f "yyyy-MM-dd HH-mm-ss"
 
 			echo "Robocopy mirror from $backup_source_path to $actualBackupDestination$backupMappedString"
@@ -1066,11 +1180,23 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				"`r`nRobocopy mirror from $backup_source_path to $actualBackupDestination$backupMappedString" | Out-File "$LogFile"  -encoding ASCII -append
 			}
 
+			# Start with an empty array of args to pass to robocopy and build it up as we go.
+			$rcArgs = @( )
 			# Z = restartable mode
+			$rcArgs += "/Z"
 			# MIR = mirror (copy all new/changed files from whole source tree, delete files in destination that are not in source)
+			$rcArgs += "/MIR"
 			# XJ = exclude Junction Points - sometimes there are DFS hidden folders on shares that are junction points managed by DFS, we do not want those
-			#echo "robocopy /Z /MIR /XJ `"$backup_source_path`" `"$actualBackupDestination`" $logFileCommandAppend"
-			`cmd /c  "robocopy /Z /MIR /XJ `"$backup_source_path`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 "`
+			$rcArgs += "/XJ"
+			$rcArgs += $backup_source_path
+			$rcArgs += $actualBackupDestination
+
+			# echo robocopy $rcArgs
+			if ($LogFile) {
+				& robocopy $rcArgs | Out-File "$LogFile" -encoding ASCII -append
+			} else {
+				& robocopy $rcArgs
+			}
 
 			# Robocopy exit codes are documented at http://support.microsoft.com/kb/954404
 			# and here is the table of codes:
@@ -1389,9 +1515,19 @@ if ($substDone) {
 }
 
 if (-not ([string]::IsNullOrEmpty($postExecutionCommand))) {
-	echo "`nrunning postexecution command ($postExecutionCommand)`n"
-	$output = `cmd /c  `"$postExecutionCommand`"`
-
-	$output += "`n"
-	echo $output
+	echo "`nrunning postexecution command ($postExecutionCommand)"
+	$postExecutionArgs = Split-CommandLine $postExecutionCommand
+	$postExecutionCmd = $postExecutionArgs[0]
+	$postExecutionNumArgs = $postExecutionArgs.Length - 1
+	if ($postExecutionNumArgs -gt 0) {
+		$postExecutionArgs = $postExecutionArgs[1..$postExecutionNumArgs]
+	} else {
+		$postExecutionArgs = ""
+	}
+	# echo $postExecutionCmd $postExecutionArgs
+	if ($postExecutionNumArgs -gt 0) {
+		& $postExecutionCmd $postExecutionArgs
+	} else {
+		& $postExecutionCmd
+	}
 }
