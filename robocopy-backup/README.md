@@ -29,3 +29,10 @@ INSTALLATION
 6. allow local non-signed scripts to run by typing “Set-ExecutionPolicy RemoteSigned“
 7. make a batch file and INI file similar to the examples here, as needed
 9. run the batch file interactively, or add a task to Task Scheduler to run as required
+
+V1.1 RELEASE NOTES
+------------------
+1. Error messages are improved when checking possible destinations for the Robocopy.
+2. Only try to send email if the computer has at least a network connection that has a default gateway. This saves big delays repeatedly trying to send email if the computer is off-line.
+3. Report host IP addresses and gateways in the log file. This helps with problem diagnosis "after the event".
+4. Use the Powershell "&" "invoke" command to execute the pre-execution, robocopy and post-execution commands rather than "cmd /c". This is more portable across Windows 7/8/8.1/10 and various Windows Server releases with different Powershell versions.

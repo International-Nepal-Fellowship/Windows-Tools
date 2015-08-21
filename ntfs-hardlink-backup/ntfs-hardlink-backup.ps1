@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	NTFS-HARDLINK-BACKUP Version: 2.1-ALPHA4
+	NTFS-HARDLINK-BACKUP Version: 2.1
 
 	This software is used for creating hard-link-backups.
 	The real magic is done by DeLoreanCopy of ln: http://schinagl.priv.at/nt/ln/ln.html	So all credit goes to Hermann Schinagl.
@@ -100,10 +100,14 @@
 	Switch on display of the time at each step of the job.
 .PARAMETER preExecutionCommand
 	Command to run before the start of the backup.
+	Note: Only a single command with parameters is supported. If you need to do multiple commands (separated by "&", "&&", "||"...)
+	then put them in a batch file and call the batch file from here.
 .PARAMETER preExecutionDelay
 	Time in milliseconds to pause between running the preExecutionCommand and the start of the backup. Default = 0
 .PARAMETER postExecutionCommand
 	Command to run after the backup is done.
+	Note: Only a single command with parameters is supported. If you need to do multiple commands (separated by "&", "&&", "||"...)
+	then put them in a batch file and call the batch file from here.
 .PARAMETER lnPath
 	The full path to the ln executable. e.g. c:\Tools\Backup\ln.exe
 .PARAMETER version
@@ -464,6 +468,79 @@ Function Get-Version
 				}
 			}
 		}
+	}
+}
+
+function Split-CommandLine
+{
+	<#
+	.Synopsis
+		Parse command-line arguments using Win32 API CommandLineToArgvW function.
+
+	.Link
+		https://github.com/beatcracker/Powershell-Misc/blob/master/Split-CommandLine.ps1
+		http://edgylogic.com/blog/powershell-and-external-commands-done-right/
+
+	.Description
+		This is the Cmdlet version of the code from the article http://edgylogic.com/blog/powershell-and-external-commands-done-right.
+		It can parse command-line arguments using Win32 API function CommandLineToArgvW . 
+
+	.Parameter CommandLine
+		A string representing the command-line to parse. If not specified, the command-line of the current PowerShell host is used.
+	#>
+	[CmdletBinding()]
+	Param
+	(
+		[Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true, Position=0)]
+		[ValidateNotNullOrEmpty()]
+		[string]$CommandLine
+	)
+
+	Begin
+	{
+		$Kernel32Definition = @'
+			[DllImport("kernel32")]
+			public static extern IntPtr LocalFree(IntPtr hMem);
+'@
+		$Kernel32 = Add-Type -MemberDefinition $Kernel32Definition -Name 'Kernel32' -Namespace 'Win32' -PassThru
+
+		$Shell32Definition = @'
+			[DllImport("shell32.dll", SetLastError = true)]
+			public static extern IntPtr CommandLineToArgvW(
+				[MarshalAs(UnmanagedType.LPWStr)] string lpCmdLine,
+				out int pNumArgs);
+'@
+		$Shell32 = Add-Type -MemberDefinition $Shell32Definition -Name 'Shell32' -Namespace 'Win32' -PassThru
+	}
+
+	Process
+	{
+		$ParsedArgCount = 0
+		$ParsedArgsPtr = $Shell32::CommandLineToArgvW($CommandLine, [ref]$ParsedArgCount)
+
+		Try
+		{
+			$ParsedArgs = @();
+
+			0..$ParsedArgCount | ForEach-Object {
+				$ParsedArgs += [System.Runtime.InteropServices.Marshal]::PtrToStringUni(
+					[System.Runtime.InteropServices.Marshal]::ReadIntPtr($ParsedArgsPtr, $_ * [IntPtr]::Size)
+				)
+			}
+		}
+		Finally
+		{
+			$Kernel32::LocalFree($ParsedArgsPtr) | Out-Null
+		}
+
+		$ret = @()
+
+		# -lt to skip the last item, which is a NULL ptr
+		for ($i = 0; $i -lt $ParsedArgCount; $i += 1) {
+			$ret += $ParsedArgs[$i]
+		}
+
+		return $ret
 	}
 }
 
@@ -1013,12 +1090,13 @@ foreach ($adapter in $localAdapters) {
 	}
 }
 
-# Try to run ln.exe just to check if it can start. Possible that the ln version does not fit the Windows version (e.g. 64bit installed on a 32bit system)
-$output=`cmd /c "`"$lnPath`"  -h" 2`>`&1`
-
-# If we could not find ln.exe, there is no point in trying to make a backup
-if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf) -or ($LASTEXITCODE -ne 0) ) {
-	$output += "`nERROR: could not run ln.exe`n"
+# If we cannot find ln.exe, there is no point in trying to make a backup
+if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType leaf)) {
+	if ([string]::IsNullOrEmpty($lnPath)) {
+		$output = "`nERROR: ln.exe not found`n"
+	} elseif (!(Test-Path -Path $lnPath -PathType leaf)) {
+		$output = "`nERROR: ln.exe is not a file`n"
+	}
 	echo $output
 	$emailBody = "$emailBody`r`n$output`r`n"
 
@@ -1027,24 +1105,85 @@ if ([string]::IsNullOrEmpty($lnPath) -or !(Test-Path -Path $lnPath -PathType lea
 	}
 
 	$parameters_ok = $False
+} else {
+	try {
+		# Try to run ln.exe just to check if it can start.
+		$lncheckArgs = @( )
+		$lncheckArgs += "-h"
+		& $lnPath $lncheckArgs | Out-Null
+		if ($LASTEXITCODE -ne 0) {
+			$output = "`nERROR: Cannot run ln.exe with help`n"
+			echo $output
+			$emailBody = "$emailBody`r`n$output`r`n"
+
+			if ($LogFile) {
+				$output | Out-File "$LogFile"  -encoding ASCII -append
+			}
+
+			$parameters_ok = $False
+		}
+	}
+	catch {
+		# It is possible that the ln version does not match the Windows version (e.g. 64bit installed on a 32bit system)
+		$output = "`nERROR: Cannot run ln.exe - maybe you have the 64-bit version on a 32-bit system`n"
+		echo $output $_
+		$emailBody = "$emailBody`r`n$output`r`n$_"
+
+		if ($LogFile) {
+			$output | Out-File "$LogFile"  -encoding ASCII -append
+		}
+
+		$parameters_ok = $False
+	}
+
 }
 
 if (![string]::IsNullOrEmpty($preExecutionCommand)) {
-	$output = "`nrunning preexecution command ($preExecutionCommand)`n"
-	$output += `cmd /c  `"$preExecutionCommand`" 2`>`&1`
-
-	# If the command fails we want a message in the Email, otherwise the details will be only shown in the log file
-	# Make sure this if statement is directly after the cmd command
-	if (!$?) {
-		$output += "`n`nERROR: the pre-execution-command ended with an error"
-		$emailBody = "$emailBody`r$output`r`n"
-		$error_during_backup = $True
+	# It seems that the first word of the command string (the command itself) has to be sent individually
+	# in the "ampersand" invoking.
+	# The remaining parameters (if any) need to be passed as an array.
+	# So we split the user-provided string into space-separated parts then specifically take out the first part.
+	$preExecutionArgs = Split-CommandLine $preExecutionCommand
+	$preExecutionCmd = $preExecutionArgs[0]
+	$preExecutionNumArgs = $preExecutionArgs.Length - 1
+	if ($preExecutionNumArgs -gt 0) {
+		$preExecutionArgs = $preExecutionArgs[1..$preExecutionNumArgs]
+	} else {
+		$preExecutionArgs = ""
 	}
 
-	$output += "`n"
+	$output = "`nRunning preexecution command ($preExecutionCommand)"
 	echo $output
 	if ($LogFile) {
 		$output | Out-File "$LogFile"  -encoding ASCII -append
+	}
+
+	# echo $preExecutionCmd $preExecutionArgs
+	if ($preExecutionNumArgs -gt 0) {
+		if ($LogFile) {
+			& $preExecutionCmd $preExecutionArgs | Out-File "$LogFile" -encoding ASCII -append
+		} else {
+			& $preExecutionCmd $preExecutionArgs
+		}
+	} else {
+		if ($LogFile) {
+			& $preExecutionCmd | Out-File "$LogFile" -encoding ASCII -append
+		} else {
+			& $preExecutionCmd
+		}
+	}
+
+	# If the command fails we want a message in the Email, otherwise the details will be only shown in the log file
+	# Make sure this if statement is directly after the command has been run.
+	if (!$?) {
+		$output = "`n`nERROR: the pre-execution-command ended with an error"
+		$emailBody = "$emailBody`r$output`r`n"
+		$error_during_backup = $True
+		$output += "`n"
+		echo $output
+		if ($LogFile) {
+			$output | Out-File "$LogFile"  -encoding ASCII -append
+		}
 	}
 }
 
@@ -1309,63 +1448,51 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 
 			}
 
+			# Start with an empty array of args to pass to ln and build it up as we go.
+			$lnArgs = @( )
+
 			if ($traditional -eq $True) {
-				$traditionalArgument = " --traditional "
-			} else {
-				$traditionalArgument = ""
+				$lnArgs += "--traditional"
 			}
 
 			if ($noads -eq $True) {
-				$noadsArgument = " --noads "
-			} else {
-				$noadsArgument = ""
+				$lnArgs += "--noads"
 			}
 
 			if ($noea -eq $True) {
-				$noeaArgument = " --noea "
-			} else {
-				$noeaArgument = ""
+				$lnArgs += "--noea"
 			}
 
 			if ($splice -eq $True) {
-				$spliceArgument = " --splice "
-			} else {
-				$spliceArgument = ""
+				$lnArgs += "--splice"
 			}
 
 			if ($unroll -eq $True) {
-				$unrollArgument = " --unroll "
-			} else {
-				$unrollArgument = ""
+				$lnArgs += "--unroll"
 			}
 
 			if ($backupModeACLs -eq $True) {
-				$backupModeACLsArgument = " --backup "
-			} else {
-				$backupModeACLsArgument = ""
+				$lnArgs += "--backup"
 			}
 
 			if ($timeTolerance -ne 0) {
-				$timeToleranceArgument = " --timetolerance $timeTolerance "
-			} else {
-				$timeToleranceArgument = ""
+				$lnArgs += "--timetolerance"
+				$lnArgs += "$timeTolerance"
 			}
 
-			$excludeFilesString=" "
 			foreach ($item in $excludeFiles) {
 				if ($item -AND $item.Trim()) {
-					$excludeFilesString = "$excludeFilesString --exclude `"$item`" "
+					$lnArgs += "--exclude"
+					$lnArgs += "$item"
 				}
 			}
 
-			$excludeDirsString=" "
 			foreach ($item in $excludeDirs) {
 				if ($item -AND $item.Trim()) {
-					$excludeDirsString = "$excludeDirsString --excludedir `"$item`" "
+					$lnArgs += "--excludedir"
+					$lnArgs += "$item"
 				}
 			}
-
-			$commonArgumentString = "$traditionalArgument $noadsArgument $noeaArgument $timeToleranceArgument $excludeFilesString $excludeDirsString $spliceArgument  $unrollArgument $backupModeACLsArgument"
 
 			if ($LogFile) {
 				$logFileCommandAppend = " >> `"$LogFile`""
@@ -1379,16 +1506,26 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 					"`r`nFull copy from $backup_source_path to $actualBackupDestination$backupMappedString" | Out-File "$LogFile"  -encoding ASCII -append
 				}
 
-				# echo "$lnPath $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`"    $logFileCommandAppend"
-				`cmd /c  "`"`"$lnPath`" $commonArgumentString --copy `"$backup_source_path`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 `""`
+				$lnArgs += "--copy"
+				$lnArgs += $backup_source_path
+				$lnArgs += $actualBackupDestination
 			} else {
 				echo "Delorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $selectedBackupDestination\$lastBackupFolderName"
 				if ($LogFile) {
 					"`r`nDelorian copy from $backup_source_path to $actualBackupDestination$backupMappedString against $selectedBackupDestination\$lastBackupFolderName" | Out-File "$LogFile"  -encoding ASCII -append
 				}
 
-				# echo "$lnPath $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend"
-				`cmd /c  "`"`"$lnPath`" $commonArgumentString --delorean `"$backup_source_path`" `"$selectedBackupDestination\$lastBackupFolderName`" `"$actualBackupDestination`" $logFileCommandAppend 2`>`&1 `""`
+				$lnArgs += "--delorean"
+				$lnArgs += $backup_source_path
+				$lnArgs += $selectedBackupDestination + "\" + $lastBackupFolderName
+				$lnArgs += $actualBackupDestination
+			}
+
+			# echo $lnPath $lnArgs
+			if ($LogFile) {
+				& $lnPath $lnArgs | Out-File "$LogFile" -encoding ASCII -append
+			} else {
+				& $lnPath $lnArgs
 			}
 
 			$saved_lastexitcode = $LASTEXITCODE
@@ -1467,8 +1604,16 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 						"`r`nDeleting $folderToDelete" | Out-File "$LogFile"  -encoding ASCII -append
 					}
 					$backupsDeleted++
+					$lndelArgs = @( )
+					$lndelArgs += "--deeppathdelete"
+					$lndelArgs += $folderToDelete
 
-					`cmd /c  "`"`"$lnPath`"  --deeppathdelete `"$folderToDelete`" $logFileCommandAppend`""`
+					# echo $lnPath $lndelArgs
+					if ($LogFile) {
+						& $lnPath $lndelArgs | Out-File "$LogFile" -encoding ASCII -append
+					} else {
+						& $lnPath $lndelArgs
+					}
 				}
 
 				$summary = "`nDeleted $backupsDeleted old backup(s)`n"
@@ -1743,9 +1888,19 @@ if ($substDone) {
 }
 
 if (-not ([string]::IsNullOrEmpty($postExecutionCommand))) {
-	echo "`nrunning postexecution command ($postExecutionCommand)`n"
-	$output = `cmd /c  `"$postExecutionCommand`"`
-
-	$output += "`n"
-	echo $output
+	echo "`nrunning postexecution command ($postExecutionCommand)"
+	$postExecutionArgs = Split-CommandLine $postExecutionCommand
+	$postExecutionCmd = $postExecutionArgs[0]
+	$postExecutionNumArgs = $postExecutionArgs.Length - 1
+	if ($postExecutionNumArgs -gt 0) {
+		$postExecutionArgs = $postExecutionArgs[1..$postExecutionNumArgs]
+	} else {
+		$postExecutionArgs = ""
+	}
+	# echo $postExecutionCmd $postExecutionArgs
+	if ($postExecutionNumArgs -gt 0) {
+		& $postExecutionCmd $postExecutionArgs
+	} else {
+		& $postExecutionCmd
+	}
 }
