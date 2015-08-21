@@ -34,7 +34,7 @@ INSTALLATION
 8. allow local non-signed scripts to run by typing “Set-ExecutionPolicy RemoteSigned“
 9. run ntfs-hardlink-backup.ps1 with full path
 
-V1.1 RELEASE NOTES
+V2.1 RELEASE NOTES
 ------------------
 1. Error messages are improved when checking possible destinations for the backup.
 2. Only try to send email if the computer has at least a network connection that has a default gateway. This saves big delays repeatedly trying to send email if the computer is off-line.
