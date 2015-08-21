@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	ROBOCOPY-BACKUP Version: 1.1-ALPHA4
+	ROBOCOPY-BACKUP Version: 1.1
 
 	This software is used for creating mirror copies/backups using Robocopy
 	This code is based on ntfs-hardlink-backup.ps1 from https://github.com/individual-it/ntfs-hardlink-backup
