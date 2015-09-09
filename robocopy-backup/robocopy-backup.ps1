@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-	ROBOCOPY-BACKUP Version: 1.1
+	ROBOCOPY-BACKUP Version: 1.2-ALPHA1
 
 	This software is used for creating mirror copies/backups using Robocopy
 	This code is based on ntfs-hardlink-backup.ps1 from https://github.com/individual-it/ntfs-hardlink-backup
@@ -53,6 +53,12 @@
 	Switch off the use of SSL to send Emails.
 .PARAMETER NoShadowCopy
 	Switch off the use of Shadow Copies. Can be useful if you have no permissions to create Shadow Copies.
+.PARAMETER ShadowCopySymLinkDir
+	When using a shadow copy, this script needs to make a symlink to the internal shadow copy location.
+	Robocopy cannot directly use the internal shadow copy location. It will use this symlink to read the
+	files in the shadow copy. Specify some temporary place to put this link. Default is C:\ShadowCopySymLink
+	If you are running multiple different Robocopy Backup jobs using Shadow Copy on one machine,
+	then be sure to specify a different ShadowCopySymLinkDir for each job.
 .PARAMETER SMTPPort
 	Port of the SMTP Server. Default=587
 .PARAMETER emailJobName
@@ -116,6 +122,8 @@ Param(
 	[switch]$NoSMTPOverSSL=$False,
 	[Parameter(Mandatory=$False)]
 	[switch]$NoShadowCopy=$False,
+	[Parameter(Mandatory=$False)]
+	[string]$ShadowCopySymLinkDir="",
 	[Parameter(Mandatory=$False)]
 	[Int32]$SMTPPort,
 	[Parameter(Mandatory=$False)]
@@ -597,6 +605,13 @@ if (-not $NoShadowCopy.IsPresent) {
 	$NoShadowCopy = Is-TrueString "${IniFileString}"
 }
 
+if ([string]::IsNullOrEmpty($ShadowCopySymLinkDir)) {
+	$ShadowCopySymLinkDir = Get-IniParameter "ShadowCopySymLinkDir" "${FQDN}"
+	if ([string]::IsNullOrEmpty($ShadowCopySymLinkDir)) {
+		$ShadowCopySymLinkDir = "C:\ShadowCopySymLink"
+	}
+}
+
 if ($SMTPPort -eq 0) {
 	$SMTPPort = Get-IniParameter "SMTPPort" "${FQDN}"
 	if ($SMTPPort -eq 0) {
@@ -1075,7 +1090,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 						}
 						echo "$stepCounter. $stepTime Re-using previous Shadow Volume Copy"
 						$stepCounter++
-						$backup_source_path = $s2.DeviceObject+$backup_source_path
+						$backup_source_path = $ShadowCopySymLinkDir + $backup_source_path
 					} else {
 						if ($num_shadow_copies -gt 0) {
 							# Delete the previous shadow copy that was from some other drive letter
@@ -1100,6 +1115,11 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 									break
 								}
 							}
+							# Delete the shadow copy sym link dir that pointed to the previous shadow copy.
+							If (Test-Path "$ShadowCopySymLinkDir") {
+								# Note: Remove-Item does not understand sym links
+								cmd /c rmdir $ShadowCopySymLinkDir
+							}
 						}
 						if ($StepTiming -eq $True) {
 							$stepTime = get-date -f "yyyy-MM-dd HH-mm-ss"
@@ -1115,14 +1135,46 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 								throw "Shadow Copy Creation failed. Return Code: " + $s1.ReturnValue
 							}
 
-							echo "Shadow Volume ID: $($s2.ID)"
-							echo "Shadow Volume DeviceObject: $($s2.DeviceObject)"
+							$output = "Shadow Volume ID: $($s2.ID)"
+							echo "$output"
+							if ($LogFile) {
+								$output | Out-File "$LogFile" -encoding ASCII -append
+							}
+
+							$output = "Shadow Volume DeviceObject: $($s2.DeviceObject)"
+							echo "$output"
+							if ($LogFile) {
+								$output | Out-File "$LogFile" -encoding ASCII -append
+							}
+
+							$output = "Shadowed Drive Letter: $backup_source_drive_letter"
+							echo "$output"
+							if ($LogFile) {
+								$output | Out-File "$LogFile" -encoding ASCII -append
+							}
 
 							$shadowCopies = Get-WMIObject -Class Win32_ShadowCopy
 
 							echo "done`n"
 
-							$backup_source_path = $s2.DeviceObject+$backup_source_path
+							# If the shadow copy sym link dir exists then remove it.
+							If (Test-Path "$ShadowCopySymLinkDir") {
+								# Note: Remove-Item does not understand sym links
+								cmd /c rmdir $ShadowCopySymLinkDir
+							}
+
+							# Make a symbolic link to the shadow copy
+							# Note: mklink is a built-in part of cmd
+							$DeviceObjectFull = $s2.DeviceObject + "\"
+							cmd /c mklink /D $ShadowCopySymLinkDir $DeviceObjectFull
+
+							$output = "Shadow Copy Sym Link Dir: $ShadowCopySymLinkDir"
+							echo "$output"
+							if ($LogFile) {
+								$output | Out-File "$LogFile" -encoding ASCII -append
+							}
+
+							$backup_source_path = $ShadowCopySymLinkDir + $backup_source_path
 							$num_shadow_copies++
 							$shadow_drive_letter = $backup_source_drive_letter
 						}
@@ -1359,6 +1411,11 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 				$emailBody = "$emailBody`r`n$output`r`n$_"
 				$error_during_backup = $true
 				echo $output  $_
+			}
+			# If the shadow copy sym link dir exists then remove it.
+			If (Test-Path "$ShadowCopySymLinkDir") {
+				# Note: Remove-Item does not understand sym links
+				cmd /c rmdir $ShadowCopySymLinkDir
 			}
 			$num_shadow_copies--
 			echo "done`n"
