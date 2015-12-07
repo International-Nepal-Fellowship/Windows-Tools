@@ -85,10 +85,11 @@
 	Switch off the use of Shadow Copies. Can be useful if you have no permissions to create Shadow Copies.
 .PARAMETER SMTPPort
 	Port of the SMTP Server. Default=587
-.PARAMETER emailJobName
-	This is added in to the auto-generated email subject "Backup of: hostname emailJobName by: username"
+.PARAMETER jobName
+	This is added in to the auto-generated email subject "Backup of: hostname jobName by: username" and used in the status file.
+	Using the 'emailJobName' parameter is depreciated
 .PARAMETER emailSubject
-	Subject for the notification Email. This overrides the auto-generated email subject and emailJobName.
+	Subject for the notification Email. This overrides the auto-generated email subject and jobName.
 .PARAMETER emailSendRetries
 	How many times should we try to resend the Email. Default = 100
 .PARAMETER msToPauseBetweenEmailSendRetries
@@ -178,6 +179,8 @@ Param(
 	[string]$localSubnetMask,
 	[Parameter(Mandatory=$False)]
 	[string]$emailSubject="",
+	[Parameter(Mandatory=$False)]
+	[string]$jobName="",
 	[Parameter(Mandatory=$False)]
 	[string]$emailJobName="",
 	[Parameter(Mandatory=$False)]
@@ -790,6 +793,21 @@ if ([string]::IsNullOrEmpty($emailSubject)) {
 
 if ([string]::IsNullOrEmpty($emailJobName)) {
 	$emailJobName = Get-IniParameter "emailJobName" "${FQDN}"
+	
+	$output = "`WARNING: using the 'emailJobName' parameter is depreciated! Please use 'jobName'`n"
+	echo $output
+	$emailBody = "$emailBody`r`n$output`r`n"
+
+	$tempLogContent += $output	
+}
+
+if ([string]::IsNullOrEmpty($jobName)) {
+	$jobName = Get-IniParameter "jobName" "${FQDN}"
+	
+	#if there is still not $jobName set use the depreciated $emailJobName
+	if ([string]::IsNullOrEmpty($jobName)) {
+		$jobName=$emailJobName
+	}
 }
 
 if ([string]::IsNullOrEmpty($excludeFiles)) {
@@ -812,6 +830,9 @@ if (-not $StepTiming.IsPresent) {
 }
 
 if ([string]::IsNullOrEmpty($emailSubject)) {
+	
+	$emailJobName = $jobName #to use here the old name makes sense because this is only for Email
+	
 	if (-not ([string]::IsNullOrEmpty($emailJobName))) {
 		$emailJobName += " "
 	}
@@ -1788,7 +1809,7 @@ if ($error_during_backup) {
 $xmlWriter.WriteStartElement('NTFS-HARDLINK-BACKUP')
 $XmlWriter.WriteElementString('VERSION', $versionString)
 $XmlWriter.WriteElementString('STATUS', $XMLStatus)
-$XmlWriter.WriteElementString('JOBNAME', $emailJobName.Trim())
+$XmlWriter.WriteElementString('JOBNAME', $jobName)
 $XmlWriter.WriteElementString('LASTRUN', $dateTime)
 $XmlWriter.WriteElementString('DESTINATION', "$selectedBackupDestination$backupMappedString")
 
