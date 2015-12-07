@@ -1827,11 +1827,16 @@ if ($error_during_backup) {
 	$backupStatus = "OK"
 }
 
+#make the DateTime more general/SQL like. We have used "-" between h,m & m because we cannot have ":" in the folder/filenames
+#but here we really want to have something that is more general and easier to parse
+$dateTimeforXML = [DateTime]::ParseExact($dateTime, "yyyy-MM-dd HH-mm-ss", $null)
+$dateTimeforXML = Get-Date -Date $dateTimeforXML -f "yyyy-MM-dd HH:mm:ss"
+
 $xmlWriter.WriteStartElement('NTFS-HARDLINK-BACKUP')
 $xmlWriter.WriteElementString('VERSION', $versionString)
 $xmlWriter.WriteElementString('STATUS', $backupStatus)
 $xmlWriter.WriteElementString('JOBNAME', $jobName)
-$xmlWriter.WriteElementString('LASTRUN', $dateTime)
+$xmlWriter.WriteElementString('LASTRUN', $dateTimeforXML)
 $xmlWriter.WriteElementString('DESTINATION', "$selectedBackupDestination$backupMappedString")
 
 $xmlWriter.WriteEndElement()
