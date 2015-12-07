@@ -1832,7 +1832,7 @@ if ($error_during_backup) {
 $dateTimeforXML = [DateTime]::ParseExact($dateTime, "yyyy-MM-dd HH-mm-ss", $null)
 $dateTimeforXML = Get-Date -Date $dateTimeforXML -f "yyyy-MM-dd HH:mm:ss"
 
-$xmlWriter.WriteStartElement('NTFS-HARDLINK-BACKUP')
+$xmlWriter.WriteStartElement('NTFSHARDLINKBACKUP')
 $xmlWriter.WriteElementString('VERSION', $versionString)
 $xmlWriter.WriteElementString('STATUS', $backupStatus)
 $xmlWriter.WriteElementString('JOBNAME', $jobName)
