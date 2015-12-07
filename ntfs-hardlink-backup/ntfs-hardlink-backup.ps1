@@ -97,6 +97,9 @@
 .PARAMETER LogFile
 	Path and filename for the logfile. If just a path is given, then "yyyy-mm-dd hh-mm-ss.log" is written to that folder.
 	Default is to write "yyyy-mm-dd hh-mm-ss.log" in the backup destination folder.
+.PARAMETER statusFile
+	Path and filename for the status File. If just a path is given, then "status.xml" is written to that folder.
+	Default is to write "status.xml" in the logfile destination folder.
 .PARAMETER StepTiming
 	Switch on display of the time at each step of the job.
 .PARAMETER preExecutionCommand
@@ -189,6 +192,8 @@ Param(
 	[String[]]$excludeDirs,
 	[Parameter(Mandatory=$False)]
 	[string]$LogFile="",
+	[Parameter(Mandatory=$False)]
+	[string]$statusFile="",
 	[Parameter(Mandatory=$False)]
 	[switch]$StepTiming=$False,
 	[Parameter(Mandatory=$False)]
@@ -1079,6 +1084,24 @@ if ($LogFile) {
 	$tempLogContent | Out-File "$LogFile"  -encoding ASCII -append
 }
 
+if ([string]::IsNullOrEmpty($statusFile)) {
+	$statusFile = Get-IniParameter "statusFile" "${FQDN}"
+}
+
+if ([string]::IsNullOrEmpty($statusFile)) {
+	#no status File is specified, use the LogFile Folder as folder and "status.xml" as filename
+	$statusFile = "$logFileDestination\status.xml"
+} else {
+	if (-not [System.IO.Path]::IsPathRooted($statusFile)) {
+		#not a full path is given, so use the logfile Folder as basis
+		$statusFile = "$logFileDestination\$statusFile"
+	}
+	if (Test-Path -Path $statusFile -pathType container) {
+		# The status file parameter points to a folder, so create a "status.xml" in that folder.
+		$statusFile = "$statusFile\status.xml"
+	} 
+}
+
 if ([string]::IsNullOrEmpty($backupSources)) {
 	# No backup sources on command line, in host-specific or common section of ini file
 	# Backup sources are mandatory, so flag the problem.
@@ -1791,9 +1814,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 
 #XML Status report
 echo "============Generating XML Status report============"
-
-$XMLStatusFile = "$logFileDestination\status.xml"
-$XmlWriter = New-Object System.XMl.XmlTextWriter($XMLStatusFile,$Null)
+$XmlWriter = New-Object System.XMl.XmlTextWriter($statusFile,$Null)
 $xmlWriter.Formatting = 'Indented'
 $xmlWriter.Indentation = 1
 $XmlWriter.IndentChar = "`t"
