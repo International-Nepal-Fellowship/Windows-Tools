@@ -87,7 +87,7 @@
 	Port of the SMTP Server. Default=587
 .PARAMETER jobName
 	This is added in to the auto-generated email subject "Backup of: hostname jobName by: username" and used in the status file.
-	Using the 'emailJobName' parameter is depreciated
+	Using the 'emailJobName' parameter is deprecated
 .PARAMETER emailSubject
 	Subject for the notification Email. This overrides the auto-generated email subject and jobName.
 .PARAMETER emailSendRetries
@@ -799,7 +799,7 @@ if ([string]::IsNullOrEmpty($emailSubject)) {
 if ([string]::IsNullOrEmpty($emailJobName)) {
 	$emailJobName = Get-IniParameter "emailJobName" "${FQDN}"
 	
-	$output = "`WARNING: using the 'emailJobName' parameter is depreciated! Please use 'jobName'`n"
+	$output = "`WARNING: using the 'emailJobName' parameter is deprecated! Please use 'jobName'`n"
 	echo $output
 	$emailBody = "$emailBody`r`n$output`r`n"
 
@@ -809,7 +809,7 @@ if ([string]::IsNullOrEmpty($emailJobName)) {
 if ([string]::IsNullOrEmpty($jobName)) {
 	$jobName = Get-IniParameter "jobName" "${FQDN}"
 	
-	#if there is still not $jobName set use the depreciated $emailJobName
+	#if there is still not $jobName set use the deprecated $emailJobName
 	if ([string]::IsNullOrEmpty($jobName)) {
 		$jobName=$emailJobName
 	}
