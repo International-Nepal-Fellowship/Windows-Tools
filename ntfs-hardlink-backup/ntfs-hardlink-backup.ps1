@@ -798,12 +798,14 @@ if ([string]::IsNullOrEmpty($emailSubject)) {
 
 if ([string]::IsNullOrEmpty($emailJobName)) {
 	$emailJobName = Get-IniParameter "emailJobName" "${FQDN}"
-	
+}
+
+if (-not [string]::IsNullOrEmpty($emailJobName)) {
 	$output = "`WARNING: using the 'emailJobName' parameter is deprecated! Please use 'jobName'`n"
 	echo $output
 	$emailBody = "$emailBody`r`n$output`r`n"
 
-	$tempLogContent += $output	
+	$tempLogContent += $output
 }
 
 if ([string]::IsNullOrEmpty($jobName)) {
