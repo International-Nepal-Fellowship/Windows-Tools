@@ -1768,6 +1768,35 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 	}
 }
 
+#XML Status report
+echo "============Generating XML Status report============"
+
+$XMLStatusFile = "$logFileDestination\status.xml"
+$XmlWriter = New-Object System.XMl.XmlTextWriter($XMLStatusFile,$Null)
+$xmlWriter.Formatting = 'Indented'
+$xmlWriter.Indentation = 1
+$XmlWriter.IndentChar = "`t"
+
+$xmlWriter.WriteStartDocument()
+
+if ($error_during_backup) {
+	$XMLStatus = "ERROR"
+} else {
+	$XMLStatus = "OK"
+}
+
+$xmlWriter.WriteStartElement('NTFS-HARDLINK-BACKUP')
+$XmlWriter.WriteElementString('VERSION', $versionString)
+$XmlWriter.WriteElementString('STATUS', $XMLStatus)
+$XmlWriter.WriteElementString('JOBNAME', $emailJobName.Trim())
+$XmlWriter.WriteElementString('LASTRUN', $dateTime)
+$XmlWriter.WriteElementString('DESTINATION', "$selectedBackupDestination$backupMappedString")
+
+$xmlWriter.WriteEndElement()
+$xmlWriter.WriteEndDocument()
+$xmlWriter.Flush()
+$xmlWriter.Close()
+
 if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	# Check if we can find any network adapter that has a default gateway
 	$localAdapters = (Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"')
