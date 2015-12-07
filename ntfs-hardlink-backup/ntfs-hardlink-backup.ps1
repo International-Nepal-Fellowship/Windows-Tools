@@ -1814,25 +1814,25 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 
 #XML Status report
 echo "============Generating XML Status report============"
-$XmlWriter = New-Object System.XMl.XmlTextWriter($statusFile,$Null)
+$xmlWriter = New-Object System.XMl.XmlTextWriter($statusFile,$Null)
 $xmlWriter.Formatting = 'Indented'
 $xmlWriter.Indentation = 1
-$XmlWriter.IndentChar = "`t"
+$xmlWriter.IndentChar = "`t"
 
 $xmlWriter.WriteStartDocument()
 
 if ($error_during_backup) {
-	$XMLStatus = "ERROR"
+	$backupStatus = "ERROR"
 } else {
-	$XMLStatus = "OK"
+	$backupStatus = "OK"
 }
 
 $xmlWriter.WriteStartElement('NTFS-HARDLINK-BACKUP')
-$XmlWriter.WriteElementString('VERSION', $versionString)
-$XmlWriter.WriteElementString('STATUS', $XMLStatus)
-$XmlWriter.WriteElementString('JOBNAME', $jobName)
-$XmlWriter.WriteElementString('LASTRUN', $dateTime)
-$XmlWriter.WriteElementString('DESTINATION', "$selectedBackupDestination$backupMappedString")
+$xmlWriter.WriteElementString('VERSION', $versionString)
+$xmlWriter.WriteElementString('STATUS', $backupStatus)
+$xmlWriter.WriteElementString('JOBNAME', $jobName)
+$xmlWriter.WriteElementString('LASTRUN', $dateTime)
+$xmlWriter.WriteElementString('DESTINATION', "$selectedBackupDestination$backupMappedString")
 
 $xmlWriter.WriteEndElement()
 $xmlWriter.WriteEndDocument()
