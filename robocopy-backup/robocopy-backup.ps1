@@ -714,12 +714,14 @@ if ([string]::IsNullOrEmpty($emailSubject)) {
 
 if ([string]::IsNullOrEmpty($emailJobName)) {
 	$emailJobName = Get-IniParameter "emailJobName" "${FQDN}"
-	
+}
+
+if (-not [string]::IsNullOrEmpty($emailJobName)) {
 	$output = "`WARNING: using the 'emailJobName' parameter is deprecated! Please use 'jobName'`n"
 	echo $output
 	$emailBody = "$emailBody`r`n$output`r`n"
 
-	$tempLogContent += $output	
+	$tempLogContent += $output
 }
 
 if ([string]::IsNullOrEmpty($jobName)) {
@@ -1511,11 +1513,16 @@ if ($error_during_backup) {
 	$backupStatus = "OK"
 }
 
-$xmlWriter.WriteStartElement('ROBOCOPY-BACKUP')
+#make the DateTime more general/SQL like. We have used "-" between h,m & m because we cannot have ":" in the folder/filenames
+#but here we really want to have something that is more general and easier to parse
+$dateTimeforXML = [DateTime]::ParseExact($dateTime, "yyyy-MM-dd HH-mm-ss", $null)
+$dateTimeforXML = Get-Date -Date $dateTimeforXML -f "yyyy-MM-dd HH:mm:ss"
+
+$xmlWriter.WriteStartElement('ROBOCOPYBACKUP')
 $xmlWriter.WriteElementString('VERSION', $versionString)
 $xmlWriter.WriteElementString('STATUS', $backupStatus)
 $xmlWriter.WriteElementString('JOBNAME', $jobName)
-$xmlWriter.WriteElementString('LASTRUN', $dateTime)
+$xmlWriter.WriteElementString('LASTRUN', $dateTimeforXML)
 $xmlWriter.WriteElementString('DESTINATION', "$selectedBackupDestination$backupMappedString")
 
 $xmlWriter.WriteEndElement()
