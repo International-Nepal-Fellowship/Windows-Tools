@@ -2,6 +2,10 @@
 
 Howto display the backup status in [OCSInventory](http://www.ocsinventory-ng.org/en/)
 
+This should work with OCS Inventory 2.0 & 2.1
+
+You need at least ntfs-hardlink-backup 2.2
+
 ## Client preparation
 
 Copy the file ntfshardlinkbackup_ocs_plugin.vbs into C:\Program Files\OCS Inventory Agent\Plugins. 
