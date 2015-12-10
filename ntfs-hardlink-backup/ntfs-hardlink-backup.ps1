@@ -85,10 +85,11 @@
 	Switch off the use of Shadow Copies. Can be useful if you have no permissions to create Shadow Copies.
 .PARAMETER SMTPPort
 	Port of the SMTP Server. Default=587
-.PARAMETER emailJobName
-	This is added in to the auto-generated email subject "Backup of: hostname emailJobName by: username"
+.PARAMETER jobName
+	This is added in to the auto-generated email subject "Backup of: hostname jobName by: username" and used in the status file.
+	Using the 'emailJobName' parameter is deprecated
 .PARAMETER emailSubject
-	Subject for the notification Email. This overrides the auto-generated email subject and emailJobName.
+	Subject for the notification Email. This overrides the auto-generated email subject and jobName.
 .PARAMETER emailSendRetries
 	How many times should we try to resend the Email. Default = 100
 .PARAMETER msToPauseBetweenEmailSendRetries
@@ -96,6 +97,9 @@
 .PARAMETER LogFile
 	Path and filename for the logfile. If just a path is given, then "yyyy-mm-dd hh-mm-ss.log" is written to that folder.
 	Default is to write "yyyy-mm-dd hh-mm-ss.log" in the backup destination folder.
+.PARAMETER statusFile
+	Path and filename for the status File. If just a path is given, then "status.xml" is written to that folder.
+	Default is to write "status.xml" in the logfile destination folder.
 .PARAMETER StepTiming
 	Switch on display of the time at each step of the job.
 .PARAMETER preExecutionCommand
@@ -179,6 +183,8 @@ Param(
 	[Parameter(Mandatory=$False)]
 	[string]$emailSubject="",
 	[Parameter(Mandatory=$False)]
+	[string]$jobName="",
+	[Parameter(Mandatory=$False)]
 	[string]$emailJobName="",
 	[Parameter(Mandatory=$False)]
 	[String[]]$excludeFiles,
@@ -186,6 +192,8 @@ Param(
 	[String[]]$excludeDirs,
 	[Parameter(Mandatory=$False)]
 	[string]$LogFile="",
+	[Parameter(Mandatory=$False)]
+	[string]$statusFile="",
 	[Parameter(Mandatory=$False)]
 	[switch]$StepTiming=$False,
 	[Parameter(Mandatory=$False)]
@@ -792,6 +800,23 @@ if ([string]::IsNullOrEmpty($emailJobName)) {
 	$emailJobName = Get-IniParameter "emailJobName" "${FQDN}"
 }
 
+if (-not [string]::IsNullOrEmpty($emailJobName)) {
+	$output = "`WARNING: using the 'emailJobName' parameter is deprecated! Please use 'jobName'`n"
+	echo $output
+	$emailBody = "$emailBody`r`n$output`r`n"
+
+	$tempLogContent += $output
+}
+
+if ([string]::IsNullOrEmpty($jobName)) {
+	$jobName = Get-IniParameter "jobName" "${FQDN}"
+	
+	#if there is still not $jobName set use the deprecated $emailJobName
+	if ([string]::IsNullOrEmpty($jobName)) {
+		$jobName=$emailJobName
+	}
+}
+
 if ([string]::IsNullOrEmpty($excludeFiles)) {
 	$excludeFilesList = Get-IniParameter "excludeFiles" "${FQDN}"
 	if (-not [string]::IsNullOrEmpty($excludeFilesList)) {
@@ -812,6 +837,9 @@ if (-not $StepTiming.IsPresent) {
 }
 
 if ([string]::IsNullOrEmpty($emailSubject)) {
+	
+	$emailJobName = $jobName #to use here the old name makes sense because this is only for Email
+	
 	if (-not ([string]::IsNullOrEmpty($emailJobName))) {
 		$emailJobName += " "
 	}
@@ -1056,6 +1084,24 @@ catch
 # Write the logs from the time we hadn't a logfile into the file
 if ($LogFile) {
 	$tempLogContent | Out-File "$LogFile"  -encoding ASCII -append
+}
+
+if ([string]::IsNullOrEmpty($statusFile)) {
+	$statusFile = Get-IniParameter "statusFile" "${FQDN}"
+}
+
+if ([string]::IsNullOrEmpty($statusFile)) {
+	#no status File is specified, use the LogFile Folder as folder and "status.xml" as filename
+	$statusFile = "$logFileDestination\status.xml"
+} else {
+	if (-not [System.IO.Path]::IsPathRooted($statusFile)) {
+		#not a full path is given, so use the logfile Folder as basis
+		$statusFile = "$logFileDestination\$statusFile"
+	}
+	if (Test-Path -Path $statusFile -pathType container) {
+		# The status file parameter points to a folder, so create a "status.xml" in that folder.
+		$statusFile = "$statusFile\status.xml"
+	} 
 }
 
 if ([string]::IsNullOrEmpty($backupSources)) {
@@ -1767,6 +1813,38 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 		$output | Out-File "$LogFile" -encoding ASCII -append
 	}
 }
+
+#XML Status report
+echo "============Generating XML Status report============"
+$xmlWriter = New-Object System.XMl.XmlTextWriter($statusFile,$Null)
+$xmlWriter.Formatting = 'Indented'
+$xmlWriter.Indentation = 1
+$xmlWriter.IndentChar = "`t"
+
+$xmlWriter.WriteStartDocument()
+
+if ($error_during_backup) {
+	$backupStatus = "ERROR"
+} else {
+	$backupStatus = "OK"
+}
+
+#make the DateTime more general/SQL like. We have used "-" between h,m & m because we cannot have ":" in the folder/filenames
+#but here we really want to have something that is more general and easier to parse
+$dateTimeforXML = [DateTime]::ParseExact($dateTime, "yyyy-MM-dd HH-mm-ss", $null)
+$dateTimeforXML = Get-Date -Date $dateTimeforXML -f "yyyy-MM-dd HH:mm:ss"
+
+$xmlWriter.WriteStartElement('NTFSHARDLINKBACKUP')
+$xmlWriter.WriteElementString('VERSION', $versionString)
+$xmlWriter.WriteElementString('STATUS', $backupStatus)
+$xmlWriter.WriteElementString('JOBNAME', $jobName)
+$xmlWriter.WriteElementString('LASTRUN', $dateTimeforXML)
+$xmlWriter.WriteElementString('DESTINATION', "$selectedBackupDestination$backupMappedString")
+
+$xmlWriter.WriteEndElement()
+$xmlWriter.WriteEndDocument()
+$xmlWriter.Flush()
+$xmlWriter.Close()
 
 if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 	# Check if we can find any network adapter that has a default gateway
