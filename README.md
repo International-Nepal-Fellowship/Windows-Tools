@@ -2,6 +2,7 @@ Windows-Tools
 =============
 
 This repo contains various handy script tools like:
+* change-passwords-remotely - to change local user passwords on a remote computer
 * ntfs-hardlink-backup - to make incremental backups keeping a history of old backups
 * robocopy-backup - make Robocopy mirror backups
 * Crypt-scripts - for mounting and dismounting TrueCrypt or VeraCrypt containers
