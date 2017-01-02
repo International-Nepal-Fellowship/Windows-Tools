@@ -1261,7 +1261,7 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 	{
 		# We don't want to have "\" at the end because we will quote the path later and ln.exe would
 		# treat this as escaping of the quote (\") and can not parse the command line.
-		# ln --copy "x:\" y:\dir\newdir
+		# ln --mirror "x:\" y:\dir\newdir
 		# see also https://github.com/individual-it/ntfs-hardlink-backup/issues/16
 		if ($backup_source.substring($backup_source.length-1,1) -eq "\") {
 			$backup_source=$backup_source.Substring(0,$backup_source.Length-1)
@@ -1547,12 +1547,12 @@ if (($parameters_ok -eq $True) -and ($doBackup -eq $True) -and (test-path $backu
 			$start_time = get-date -f "yyyy-MM-dd HH-mm-ss"
 
 			if ($lastBackupFolderName -eq "" ) {
-				echo "Full copy from $backup_source_path to $actualBackupDestination$backupMappedString"
+				echo "Mirror from $backup_source_path to $actualBackupDestination$backupMappedString"
 				if ($LogFile) {
-					"`r`nFull copy from $backup_source_path to $actualBackupDestination$backupMappedString" | Out-File "$LogFile"  -encoding ASCII -append
+					"`r`nMirror from $backup_source_path to $actualBackupDestination$backupMappedString" | Out-File "$LogFile"  -encoding ASCII -append
 				}
 
-				$lnArgs += "--copy"
+				$lnArgs += "--mirror"
 				$lnArgs += $backup_source_path
 				$lnArgs += $actualBackupDestination
 			} else {
