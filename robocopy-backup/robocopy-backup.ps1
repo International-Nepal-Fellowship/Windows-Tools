@@ -433,7 +433,7 @@ Function Get-Version
 	}
 }
 
-function Split-CommandLine
+Function Split-CommandLine
 {
 	<#
 	.Synopsis
