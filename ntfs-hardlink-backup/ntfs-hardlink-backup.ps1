@@ -1859,6 +1859,7 @@ if ($emailTo -AND $emailFrom -AND $SMTPServer) {
 
 	if ($defaultGatewayExists) {
 		echo "============Sending Email============"
+		[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 		$stepCounter = 1
 
 		if ($LogFile) {
